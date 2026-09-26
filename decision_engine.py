@@ -499,6 +499,8 @@ def handle_event(
             "Decision: No alert needed."
         )
 
+    return message
+
 
 if __name__ == "__main__":
 
