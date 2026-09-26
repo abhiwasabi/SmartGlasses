@@ -11,7 +11,7 @@ type LiveActions = {
   onCancelNote: () => void
   onNoteMode: (active: boolean) => void
 }
-export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: string, accessToken: string, beforeStart: () => void, actions: LiveActions) {
+export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: string, accessToken: string, voiceId: string, beforeStart: () => void, actions: LiveActions) {
   const [status, setStatus] = useState<Status>('off')
   const [error, setError] = useState('')
   const [captions, setCaptions] = useState<Caption[]>([])
@@ -165,7 +165,7 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
           const response = await fetch('/api/live/speech', {
             method: 'POST', signal: request.signal,
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-            body: JSON.stringify({ text }),
+            body: JSON.stringify({ text, ...(voiceId ? { voiceId } : {}) }),
           })
           if (!response.ok) {
             const data = await response.json() as { error?: string }
@@ -317,7 +317,7 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
     } catch (reason) {
       fail(reason instanceof Error ? reason.message : 'The assistant could not start. Check microphone access and try again.')
     }
-  }, [accessToken, beforeStart, microphoneId, stop])
+  }, [accessToken, beforeStart, microphoneId, stop, voiceId])
 
   useEffect(() => {
     const hidden = () => { if (document.hidden) stop() }

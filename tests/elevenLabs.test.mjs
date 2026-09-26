@@ -47,6 +47,35 @@ test('speech sends credentials only upstream and returns uncached audio', async 
   assert.equal(result.headers['Cache-Control'], 'no-store')
   assert.deepEqual([...result.body], [1, 2, 3])
 })
+test('lists account voices and uses an available selected voice', async () => {
+  const calls = []
+  const handler = elevenLabsMiddleware(settings, async (url, options) => {
+    calls.push(url)
+    assert.equal(options.headers['xi-api-key'], settings.apiKey)
+    if (url.includes('/v2/voices')) return Response.json({ voices: [
+      { voice_id: 'chosen-voice', name: 'Hale' },
+      { voice_id: 'second-voice', name: 'River' },
+    ] })
+    assert.match(url, /second-voice/)
+    return new Response(new Uint8Array([4, 5, 6]))
+  }, authorize)
+  const listed = await request(handler, { url: '/api/live/voices', method: 'GET' }, '')
+  assert.deepEqual(JSON.parse(listed.body), { voices: [
+    { id: 'chosen-voice', name: 'Hale' },
+    { id: 'second-voice', name: 'River' },
+  ], defaultVoiceId: 'chosen-voice' })
+  const spoken = await request(handler, {}, JSON.stringify({ text: 'Hello.', voiceId: 'second-voice' }))
+  assert.equal(spoken.status, 200)
+  assert.equal(calls.filter(url => url.includes('/v2/voices')).length, 1)
+})
+test('rejects a voice that is not available to the ElevenLabs account', async () => {
+  const handler = elevenLabsMiddleware(settings, async url => {
+    if (url.includes('/v2/voices')) return Response.json({ voices: [{ voice_id: 'chosen-voice', name: 'Hale' }] })
+    return assert.fail('Must not generate speech with an unavailable voice')
+  }, authorize)
+  const result = await request(handler, {}, JSON.stringify({ text: 'Hello.', voiceId: 'unknown-voice' }))
+  assert.equal(result.status, 400)
+})
 test('speech failures do not expose provider errors or credentials', async () => {
   for (const send of [async () => { throw new Error(settings.apiKey) }, async () => new Response(settings.apiKey, { status: 401 })]) {
     const result = await request(elevenLabsMiddleware(settings, send, authorize))
