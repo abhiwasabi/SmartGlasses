@@ -5,17 +5,18 @@ import { encodePcm, decodePcm } from '../src/lib/liveAudio.ts'
 
 function request(handler, options = {}) {
   return new Promise(resolve => {
-    const req = { url: '/api/live/token', method: 'POST', headers: { 'x-live-access-code': 'private-demo' }, ...options }
+    const req = { url: '/api/live/token', method: 'POST', headers: { authorization: 'Bearer valid-session' }, ...options }
     const res = { status: 0, headers: {}, writeHead(status, headers) { this.status = status; this.headers = headers }, end(body) { resolve({ status: this.status, headers: this.headers, body: JSON.parse(body) }) } }
     void handler(req, res, () => resolve({ next: true }))
   })
 }
-const settings = { apiKey: 'server-only-secret', accessCode: 'private-demo', model: 'test-live-model' }
-test('token route requires the demo code before calling Gemini', async () => {
+const settings = { apiKey: 'server-only-secret', model: 'test-live-model', supabaseUrl: 'https://example.supabase.co', supabasePublishableKey: 'public-key' }
+const authorize = async request => request.headers.authorization === 'Bearer valid-session'
+test('token route requires a signed-in account before calling Gemini', async () => {
   let called = false
-  const handler = liveTokenMiddleware(settings, async () => { called = true; return 'temporary-token' })
+  const handler = liveTokenMiddleware(settings, async () => { called = true; return 'temporary-token' }, authorize)
   assert.equal((await request(handler, { headers: {} })).status, 401)
-  assert.equal((await request(handler, { headers: { 'x-live-access-code': 'wrong' } })).status, 401)
+  assert.equal((await request(handler, { headers: { authorization: 'Bearer expired-session' } })).status, 401)
   assert.equal(called, false)
 })
 test('missing setup returns a useful error without trying Gemini', async () => {
@@ -24,18 +25,18 @@ test('missing setup returns a useful error without trying Gemini', async () => {
   assert.match(result.body.error, /GEMINI_API_KEY/)
 })
 test('valid request returns only temporary credentials and never caches them', async () => {
-  const result = await request(liveTokenMiddleware(settings, async () => 'temporary-token'))
+  const result = await request(liveTokenMiddleware(settings, async () => 'temporary-token', authorize))
   assert.deepEqual(result.body, { token: 'temporary-token', model: 'test-live-model' })
   assert.equal(result.headers['Cache-Control'], 'no-store')
   assert.doesNotMatch(JSON.stringify(result), /server-only-secret/)
 })
 test('upstream failures do not leak key or private errors', async () => {
-  const result = await request(liveTokenMiddleware(settings, async () => { throw new Error(settings.apiKey) }))
+  const result = await request(liveTokenMiddleware(settings, async () => { throw new Error(settings.apiKey) }, authorize))
   assert.equal(result.status, 502)
   assert.doesNotMatch(JSON.stringify(result), /server-only-secret/)
 })
 test('rejects GET and rate limits repeated authorized session creation', async () => {
-  const handler = liveTokenMiddleware(settings, async () => 'temporary-token')
+  const handler = liveTokenMiddleware(settings, async () => 'temporary-token', authorize)
   assert.equal((await request(handler, { method: 'GET' })).status, 405)
   for (let i = 0; i < 6; i++) assert.equal((await request(handler)).status, 200)
   assert.equal((await request(handler)).status, 429)

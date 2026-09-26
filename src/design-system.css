@@ -472,3 +472,22 @@ main.compact-page { padding-top: 24px; }
   .assistant-setup { flex-direction: column; gap: 12px; }
   .assistant-state > span:last-child:not(.status-dot) { width: 100%; margin-left: 0; }
 }
+
+/* Account access */
+.auth-page { min-height: 100dvh; display: grid; place-items: center; padding: 24px; background: #f5f5f1; color: #151515; }
+.auth-card { width: min(440px, 100%); padding: 38px; border: 1px solid #e7e7e2; border-radius: 28px; background: #fff; box-shadow: 0 24px 70px #25251f12; }
+.auth-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 34px; font-size: 22px; }
+.auth-brand > span, .auth-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 15px; background: #f3f4ef; }
+.auth-brand > span { width: 42px; height: 42px; }
+.auth-card h1 { margin: 18px 0 8px; font-size: 28px; letter-spacing: -.7px; }
+.auth-card > p { margin: 0 0 24px; color: #777; line-height: 1.65; }
+.auth-form { display: grid; gap: 16px; }
+.auth-form label { display: grid; gap: 8px; font-size: 12px; font-weight: 600; }
+.auth-form input { min-height: 48px; border: 1px solid #dfdfda; border-radius: 14px; padding: 11px 14px; font: inherit; font-size: 16px; }
+.auth-form .button { min-height: 48px; justify-content: center; margin-top: 4px; }
+.auth-error, .auth-message { margin: 0; padding: 11px 13px; border-radius: 12px; font-size: 12px; line-height: 1.5; }
+.auth-error { color: #a64534; background: #fff1ed; }
+.auth-message { color: #4b714c; background: #eef7e9; }
+.auth-switch { display: block; margin: 20px auto 0; }
+.auth-config { display: grid; gap: 8px; padding: 15px; border-radius: 14px; background: #f6f6f3; overflow-wrap: anywhere; }
+@media (max-width: 520px) { .auth-card { padding: 26px 22px; border-radius: 22px; } }

@@ -1,3 +1,5 @@
+import { supabase } from './supabase'
+
 const DATABASE_NAME = 'smartglasses-dashboard';
 const DATABASE_VERSION = 1;
 const RECORDINGS_STORE = 'recordings';
@@ -76,15 +78,38 @@ async function runTransaction<T>(
   });
 }
 
+async function userId(): Promise<string | null> {
+  if (!supabase) return null
+  const { data } = await supabase.auth.getUser()
+  return data.user?.id ?? null
+}
+
+const cloudPath = (owner: string, id: string) => `${owner}/${id}`
+const localKey = (owner: string | null, id: string) => owner ? `${owner}:${id}` : id
+
 export async function saveRecording(id: string, blob: Blob): Promise<void> {
-  await runTransaction('readwrite', (store) => store.put(blob, id));
+  const owner = await userId()
+  await runTransaction('readwrite', (store) => store.put(blob, localKey(owner, id)))
+  if (!supabase || !owner) return
+  const { error } = await supabase.storage.from('recordings').upload(cloudPath(owner, id), blob, { contentType: blob.type, upsert: true })
+  if (error) throw error
 }
 
 export async function getRecording(id: string): Promise<Blob | undefined> {
-  const recording: unknown = await runTransaction('readonly', (store) => store.get(id));
-  return recording instanceof Blob ? recording : undefined;
+  const owner = await userId()
+  const recording: unknown = await runTransaction('readonly', (store) => store.get(localKey(owner, id)))
+  if (recording instanceof Blob) return recording
+  if (!supabase || !owner) return undefined
+  const { data, error } = await supabase.storage.from('recordings').download(cloudPath(owner, id))
+  if (error) return undefined
+  await runTransaction('readwrite', (store) => store.put(data, localKey(owner, id)))
+  return data
 }
 
 export async function deleteRecording(id: string): Promise<void> {
-  await runTransaction('readwrite', (store) => store.delete(id));
+  const owner = await userId()
+  await runTransaction('readwrite', (store) => store.delete(localKey(owner, id)))
+  if (!supabase || !owner) return
+  const { error } = await supabase.storage.from('recordings').remove([cloudPath(owner, id)])
+  if (error) throw error
 }
