@@ -141,6 +141,7 @@ export default function App() {
     onCancelNote: cancelVoiceNote,
     onNoteMode(active) { if (active) notify('Gemini is taking a note. Say “save note” to finish or “cancel note” to discard.') },
   })
+  const driveModeActive = assistant.status !== 'off' && assistant.mode === 'drive'
 
   function requestCapture(kind: 'record' | 'clip'): string {
     if (isRecording || camera.status === 'saving' || captureIntent.current) { notify('A recording is already in progress. Say “stop recording” to finish it.'); return 'A recording is already in progress. Do not start another one.' }
@@ -222,7 +223,10 @@ export default function App() {
     return () => window.removeEventListener('beforeunload', warn)
   }, [isRecording])
 
-  function navigate(next: View) { setView(next); setSidebarOpen(false); window.scrollTo({ top: 0, behavior: 'instant' }) }
+  function navigate(next: View) {
+    if (driveModeActive && next !== 'Overview') return
+    setView(next); setSidebarOpen(false); window.scrollTo({ top: 0, behavior: 'instant' })
+  }
   function addNote() {
     const note: Note = { id: crypto.randomUUID(), title: 'Untitled note', body: '', tag: 'Personal', updatedAt: new Date().toISOString() }
     setNotes(previous => [note, ...previous]); setSelectedNoteId(note.id); notify('A fresh page. Make it yours.')
@@ -284,15 +288,15 @@ export default function App() {
     <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
       <a className="brand" href="#" onClick={event => { event.preventDefault(); navigate('Overview') }}><span className="brand-icon"><Glasses size={26} strokeWidth={1.8} /></span><span>clarity<span className="brand-period">.</span></span></a>
       <div className="workspace-label">YOUR WORKSPACE</div>
-      <nav aria-label="Main navigation">{navItems.map(item => <button key={item.name} aria-current={view === item.name ? 'page' : undefined} className={`nav-item ${view === item.name ? 'active' : ''}`} onClick={() => navigate(item.name)}><item.icon size={18} strokeWidth={1.8} /><span>{item.name}</span>{item.name === 'Notes' && <span className="nav-count">{notes.length}</span>}{item.name === 'Memories' && <span className="nav-count">{memories.length}</span>}{item.name === 'Camera' && isRecording && <span className="record-dot" />}</button>)}</nav>
+      <nav aria-label="Main navigation">{navItems.map(item => <button key={item.name} disabled={driveModeActive && item.name !== 'Overview'} aria-current={view === item.name ? 'page' : undefined} className={`nav-item ${view === item.name ? 'active' : ''}`} onClick={() => navigate(item.name)}><item.icon size={18} strokeWidth={1.8} /><span>{item.name}</span>{item.name === 'Notes' && <span className="nav-count">{notes.length}</span>}{item.name === 'Memories' && <span className="nav-count">{memories.length}</span>}{item.name === 'Camera' && isRecording && <span className="record-dot" />}</button>)}</nav>
       <div className="sidebar-bottom">
-      <button className="nav-item secondary-nav" onClick={() => setModal('settings')}><Settings2 size={18} />Settings</button><button className="nav-item secondary-nav" onClick={() => setModal('help')}><CircleHelp size={18} />A little help</button><div className="sidebar-profile"><div className="avatar">A</div><div><strong>My workspace</strong><span>Made for your everyday</span></div><span className="profile-local" title="Local workspace"><HardDrive size={15} /></span></div></div>
+      <button className="nav-item secondary-nav" disabled={driveModeActive} onClick={() => setModal('settings')}><Settings2 size={18} />Settings</button><button className="nav-item secondary-nav" disabled={driveModeActive} onClick={() => setModal('help')}><CircleHelp size={18} />A little help</button><div className="sidebar-profile"><div className="avatar">A</div><div><strong>My workspace</strong><span>Made for your everyday</span></div><span className="profile-local" title="Local workspace"><HardDrive size={15} /></span></div></div>
     </aside>
     <div className="workspace">
-      <header className="topbar compact-header"><div className="breadcrumb"><button className="icon-button mobile-menu" aria-label="Open navigation" onClick={() => setSidebarOpen(true)}><Menu size={20} /></button><Glasses size={19} strokeWidth={1.5} /><span className="breadcrumb-slash">/</span><span className="dashboard-title"><strong>SmartGlasses</strong><span>{view} dashboard</span></span></div><div className="topbar-actions"><span className="local-indicator"><span className="status-dot" />Local workspace</span><div className="avatar avatar-small">A</div><span className="today-date"><span className="date-number">{new Date().getDate()}</span><span className="date-description">{new Date().toLocaleDateString('en-US', { weekday: 'short' })},<br />{new Date().toLocaleDateString('en-US', { month: 'long' })}</span></span></div></header>
-      <main className="compact-page">
+      <header className="topbar compact-header"><div className="breadcrumb"><button className="icon-button mobile-menu" aria-label="Open navigation" disabled={driveModeActive} onClick={() => setSidebarOpen(true)}><Menu size={20} /></button><Glasses size={19} strokeWidth={1.5} /><span className="breadcrumb-slash">/</span><span className="dashboard-title"><strong>SmartGlasses</strong><span>{view} dashboard</span></span></div><div className="topbar-actions"><span className="local-indicator"><span className="status-dot" />Local workspace</span><div className="avatar avatar-small">A</div><span className="today-date"><span className="date-number">{new Date().getDate()}</span><span className="date-description">{new Date().toLocaleDateString('en-US', { weekday: 'short' })},<br />{new Date().toLocaleDateString('en-US', { month: 'long' })}</span></span></div></header>
+      <main className={`compact-page ${driveModeActive ? 'drive-mode-active' : ''}`}>
         {view === 'Overview' && <>
-          <AssistantPanel assistant={assistant} microphoneId={voice.microphoneId} setMicrophoneId={voice.setMicrophoneId} microphones={voice.microphones} refreshMicrophones={voice.refreshMicrophones} />
+          <AssistantPanel assistant={assistant} microphoneId={voice.microphoneId} setMicrophoneId={voice.setMicrophoneId} microphones={voice.microphones} refreshMicrophones={voice.refreshMicrophones} cameraConnected={isConnected} />
           <VoicePanel assistantActive={assistant.status !== 'off'} clipSeconds={isRecording && recordingKind.current === 'clip' ? Math.max(0, 30 - camera.elapsed) : null} />
         </>}
         {storageError && <div className="storage-error" role="alert"><CloudOff size={17} />{storageError}</div>}

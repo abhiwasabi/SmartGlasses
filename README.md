@@ -8,6 +8,7 @@ A React and TypeScript dashboard for the [SmartGlasses project](https://github.c
 - Recording playback and download, with saved recordings included in the memory library.
 - Voice-dictated reminders and lecture notes summarized into readable, titled notes when saved, with manual editing for corrections.
 - A microphone status panel, live transcript, command guide, and optional acknowledgement tones.
+- Drive Mode for brief spoken road-hazard and driving-coaching alerts from the selected camera.
 - Voice-triggered 30-second memory clips. The top memory search bar has been removed.
 - Events and memories organized by Everyday, Work, and Adventure.
 - Settings for the two ESP32-CAM addresses.
@@ -155,6 +156,23 @@ and JPEG camera frames during sessions.
 Frames are sent at most once a second and scaled to a maximum width of 640 pixels.
 The existing ESP32 preview still polls separately through the camera proxy; this
 change does not lower its ngrok traffic.
+
+### Drive Mode
+
+Choose **Drive Mode** in the assistant panel to start a voice-first driving coach.
+It requires a connected forward-facing camera and gives short spoken guidance for
+visible hazards, signs, signals, and basic driving questions. It suppresses the
+on-screen transcript while active and exposes recording and memory-clip commands;
+note-taking is disabled in this mode. Gemini 3.8 Live supports proactive audio, which
+can let the model speak about relevant visual events without waiting for a question.
+
+Drive Mode is an experimental aid, not autonomous driving, a substitute for driver
+attention, or a collision warning system. It receives one camera view at about one
+frame per second, scaled to at most 640 pixels wide. It cannot verify speed,
+distance, vehicle motion, side/rear views, or blind spots and must never confirm a
+road is clear. No navigation or live route service is connected, so turn-by-turn
+directions are unavailable. Keep your attention on the road and make every driving
+decision yourself. Test with a parked vehicle before any real-world use.
 
 Audio uses an AudioWorklet and signed 16-bit PCM at the actual microphone context
 sample rate, which Gemini resamples; replies are played as 24 kHz PCM. Use headphones
