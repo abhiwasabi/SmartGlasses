@@ -59,7 +59,7 @@ def reason_about_event(
 
         client = genai.Client(
             api_key=api_key,
-            http_options=types.HttpOptions(timeout=5000),
+            http_options=types.HttpOptions(timeout=15000),
         )
         try:
             response = client.models.generate_content(
