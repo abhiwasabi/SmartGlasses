@@ -11,7 +11,7 @@ type LiveActions = {
   onCancelNote: () => void
   onNoteMode: (active: boolean) => void
 }
-export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: string, beforeStart: () => void, actions: LiveActions) {
+export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: string, accessToken: string, beforeStart: () => void, actions: LiveActions) {
   const [status, setStatus] = useState<Status>('off')
   const [error, setError] = useState('')
   const [captions, setCaptions] = useState<Caption[]>([])
@@ -32,7 +32,7 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
     setStatus('off'); setVision(false)
   }, [])
 
-  const start = useCallback(async (accessCode: string) => {
+  const start = useCallback(async () => {
     if (starting.current) return
     stop()
     beforeStart()
@@ -164,7 +164,7 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
         try {
           const response = await fetch('/api/live/speech', {
             method: 'POST', signal: request.signal,
-            headers: { 'Content-Type': 'application/json', 'X-Live-Access-Code': accessCode },
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
             body: JSON.stringify({ text }),
           })
           if (!response.ok) {
@@ -247,7 +247,7 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
       if (!navigator.mediaDevices?.getUserMedia || !context.audioWorklet) throw new Error('Live audio needs a current browser on HTTPS or localhost.')
       // Resume immediately within the user's tap for Safari's audio permission.
       await context.resume()
-      const response = await fetch('/api/live/token', { method: 'POST', headers: { 'X-Live-Access-Code': accessCode }, signal: tokenRequest.signal })
+      const response = await fetch('/api/live/token', { method: 'POST', headers: { Authorization: `Bearer ${accessToken}` }, signal: tokenRequest.signal })
       const data = await response.json() as { error?: string; token?: string; model?: string; voiceProvider?: string }
       if (!response.ok || !data.token || !data.model) throw new Error(data.error || 'The assistant could not start.')
       elevenLabs = data.voiceProvider === 'elevenlabs'
@@ -317,7 +317,7 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
     } catch (reason) {
       fail(reason instanceof Error ? reason.message : 'The assistant could not start. Check microphone access and try again.')
     }
-  }, [beforeStart, microphoneId, stop])
+  }, [accessToken, beforeStart, microphoneId, stop])
 
   useEffect(() => {
     const hidden = () => { if (document.hidden) stop() }

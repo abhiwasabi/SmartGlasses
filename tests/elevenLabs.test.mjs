@@ -5,11 +5,12 @@ import { EventEmitter } from 'node:events'
 import { elevenLabsMiddleware } from '../src/server/elevenLabs.ts'
 import { liveTokenMiddleware } from '../src/server/geminiLive.ts'
 
-const settings = { apiKey: 'private-eleven-key', voiceId: 'chosen-voice', accessCode: 'demo-code' }
+const settings = { apiKey: 'private-eleven-key', voiceId: 'chosen-voice', supabaseUrl: 'https://example.supabase.co', supabasePublishableKey: 'public-key' }
+const authorize = async request => request.headers.authorization === 'Bearer valid-session'
 function request(handler, options = {}, body = JSON.stringify({ text: 'A chair is in front of you.' })) {
   return new Promise(resolve => {
     const req = Object.assign(Readable.from([Buffer.from(body)]), {
-      url: '/api/live/speech', method: 'POST', headers: { 'x-live-access-code': 'demo-code' }, ...options,
+      url: '/api/live/speech', method: 'POST', headers: { authorization: 'Bearer valid-session' }, ...options,
     })
     const res = Object.assign(new EventEmitter(), {
       status: 0, headers: {}, writableEnded: false,
@@ -20,14 +21,14 @@ function request(handler, options = {}, body = JSON.stringify({ text: 'A chair i
   })
 }
 test('speech requires authorization and setup before calling ElevenLabs', async () => {
-  const handler = elevenLabsMiddleware(settings, async () => assert.fail('Must not call upstream'))
+  const handler = elevenLabsMiddleware(settings, async () => assert.fail('Must not call upstream'), authorize)
   assert.equal((await request(handler, { headers: {} })).status, 401)
   assert.equal((await request(handler, { method: 'GET' })).status, 405)
   assert.equal((await request(elevenLabsMiddleware({}), {})).status, 503)
   assert.equal((await request(handler, { url: '/other' })).next, true)
 })
 test('speech rejects malformed, empty, oversized, and non-string text', async () => {
-  const handler = elevenLabsMiddleware(settings, async () => assert.fail('Must not call upstream'))
+  const handler = elevenLabsMiddleware(settings, async () => assert.fail('Must not call upstream'), authorize)
   for (const body of ['{', '{}', '{"text":42}', '{"text":" "}', JSON.stringify({ text: 'x'.repeat(4001) })]) {
     assert.equal((await request(handler, {}, body)).status, 400)
   }
@@ -39,7 +40,7 @@ test('speech sends credentials only upstream and returns uncached audio', async 
     assert.equal(options.headers['xi-api-key'], settings.apiKey)
     assert.equal(JSON.parse(options.body).model_id, 'eleven_flash_v2_5')
     return new Response(new Uint8Array([1, 2, 3]))
-  })
+  }, authorize)
   const result = await request(handler)
   assert.equal(result.status, 200)
   assert.equal(result.headers['Content-Type'], 'audio/mpeg')
@@ -48,13 +49,13 @@ test('speech sends credentials only upstream and returns uncached audio', async 
 })
 test('speech failures do not expose provider errors or credentials', async () => {
   for (const send of [async () => { throw new Error(settings.apiKey) }, async () => new Response(settings.apiKey, { status: 401 })]) {
-    const result = await request(elevenLabsMiddleware(settings, send))
+    const result = await request(elevenLabsMiddleware(settings, send, authorize))
     assert.equal(result.status, 502)
     assert.doesNotMatch(result.body, /private-eleven-key/)
   }
 })
 test('partial ElevenLabs configuration blocks session creation', async () => {
-  const handler = liveTokenMiddleware({ apiKey: 'gemini-key', accessCode: 'demo-code', elevenLabsApiKey: settings.apiKey }, async () => assert.fail())
+  const handler = liveTokenMiddleware({ apiKey: 'gemini-key', elevenLabsApiKey: settings.apiKey, supabaseUrl: settings.supabaseUrl, supabasePublishableKey: settings.supabasePublishableKey }, async () => assert.fail(), authorize)
   const result = await request(handler, { url: '/api/live/token' })
   assert.equal(result.status, 503)
 })

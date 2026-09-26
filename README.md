@@ -11,6 +11,7 @@ A React and TypeScript dashboard for the [SmartGlasses project](https://github.c
 - Voice-triggered 15-second memory clips. The top memory search bar has been removed.
 - Events and memories organized by Everyday, Work, and Adventure.
 - Settings for the two ESP32-CAM addresses.
+- Email/password accounts with private, per-user notes and memory storage through Supabase.
 - An empty workspace that contains only notes, recordings, and events you create.
 
 ## Run locally
@@ -31,13 +32,30 @@ npm run preview
 
 The build writes the frontend to `dist/`. Camera access requires browser permission; use the local URL for webcam testing.
 
+## User accounts and cloud storage
+
+Clarity uses Supabase Auth for email/password accounts, Postgres for notes and memory metadata, and a private Storage bucket for recordings. Each row and file is protected by Row Level Security so it is available only to its owner.
+
+1. Create a free Supabase project.
+2. Open **SQL Editor**, paste [`supabase/setup.sql`](supabase/setup.sql), and run it once.
+3. Copy `.env.example` to `.env.local` and add the project URL and publishable key shown under **Project Settings → API**:
+
+```env
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
+```
+
+4. Restart `npm run dev`, then create an account from the Clarity login screen. If email confirmation is enabled in Supabase, confirm the message before signing in.
+
+The publishable key is designed for browser use; never put a Supabase service-role key in a `VITE_` variable. Existing browser notes and memory metadata are imported into the first account when its cloud workspace is empty. Existing recording files upload when they are first opened.
+
 ## iPhone demo
 
 The phone layout includes bottom navigation, safe-area spacing for the notch and home indicator, touch controls, and text inputs sized to avoid Safari keyboard zoom. Open the dashboard in Safari and keep the page in the foreground while capturing. Choose **This device** to use the iPhone camera; it prefers the rear camera on initial connection. Safari uses the iPhone's default microphone for voice recognition.
 
 The iPhone must open an **HTTPS URL with a trusted certificate**. `127.0.0.1` on the phone refers to the phone, not the computer running Vite. An ordinary `http://<computer-LAN-IP>:5174` URL may display the layout but does not enable secure camera/microphone APIs. For ESP32 capture, the HTTPS origin must forward `/api/camera/capture` to the dashboard server running on the camera network; static frontend hosting alone is insufficient. This repository does not publish or configure that HTTPS endpoint automatically.
 
-Notes and videos on the computer do not appear automatically on the phone: storage is per browser and origin. Test permission prompts, speech recognition, recording, playback, and downloading on the physical iPhone before the final demo. Desktop phone-size testing does not verify iOS media services.
+After Supabase is configured, notes and videos follow the signed-in account across devices. Test permission prompts, speech recognition, recording, playback, downloading, and cloud upload on the physical iPhone before the final demo. Desktop phone-size testing does not verify iOS media services.
 
 ## Hands-free voice controls
 
@@ -125,13 +143,13 @@ hosting service cannot run this endpoint.
 1. Copy `.env.example` to `.env.local`.
 2. Have the key owner enter `GEMINI_API_KEY` privately in that file. Never put it
    in a `VITE_` variable, commit it, or paste it into chat.
-3. Set `GEMINI_LIVE_ACCESS_CODE` to a private demo code. This protects token
-   creation even when using a public ngrok URL.
+3. Configure `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`. Signed-in
+   account sessions protect token creation, including when using a public URL.
 4. Set `GEMINI_LIVE_MODEL` to a Live model available to that Gemini project
    (the example uses `gemini-3.8-live`). A regular text-only model cannot be used.
 5. Restart Vite: `npm run dev -- --port 5174 --strictPort`.
-6. Connect an ESP32 or this device's camera. In **Ask your glasses**, enter the
-   demo code, choose a microphone, and tap **Start assistant**. Allow microphone
+6. Sign in, connect an ESP32 or this device's camera, choose a microphone in
+   **Ask your glasses**, and tap **Start assistant**. Allow microphone
    access. Ask “What am I looking at?”
 
 For iPhone, open the HTTPS ngrok URL in Safari and keep the page in the foreground.
@@ -163,8 +181,8 @@ are determined by the key owner's Gemini project. A configured key and an actual
 phone are required to verify a complete live conversation.
 
 Troubleshooting: a setup error means the server env is missing or Vite needs a
-restart; an access-code error means the demo code differs from the server setting;
-a Gemini session error can mean unavailable model access, quota, or connectivity.
+restart; an account-session error means the user should sign in again; a Gemini
+session error can mean unavailable model access, quota, or connectivity.
 Never expose the permanent key in error reports.
 
 ### ElevenLabs reply voice
@@ -178,9 +196,9 @@ ELEVENLABS_VOICE_ID=your_selected_voice_id
 ```
 
 Choose a voice available to your ElevenLabs account and copy its voice ID. Keep
-the existing Gemini settings and use the same demo access code in the dashboard.
+the existing Gemini and Supabase settings in the dashboard.
 Neither permanent API key is sent to the browser. `/api/live/speech` runs on the
-server during development and preview, requires the demo code, and sends reply
+server during development and preview, requires a valid signed-in account, and sends reply
 text to ElevenLabs using `eleven_flash_v2_5`.
 
 Gemini continues receiving camera frames and microphone audio. The app collects

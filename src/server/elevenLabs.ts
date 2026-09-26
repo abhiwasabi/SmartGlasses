@@ -1,9 +1,9 @@
-import { timingSafeEqual } from 'node:crypto'
 import type { Connect } from 'vite'
+import type { AuthorizeRequest } from './auth.ts'
 
-export type SpeechSettings = { apiKey?: string; voiceId?: string; accessCode?: string }
+export type SpeechSettings = { apiKey?: string; voiceId?: string; supabaseUrl?: string; supabasePublishableKey?: string }
 
-export function elevenLabsMiddleware(settings: SpeechSettings, send: typeof fetch = fetch): Connect.NextHandleFunction {
+export function elevenLabsMiddleware(settings: SpeechSettings, send: typeof fetch = fetch, authorize: AuthorizeRequest = async () => false): Connect.NextHandleFunction {
   let requests = 0
   let windowStart = Date.now()
   return async (req, res, next) => {
@@ -13,14 +13,11 @@ export function elevenLabsMiddleware(settings: SpeechSettings, send: typeof fetc
       res.end(JSON.stringify({ error }))
     }
     if (req.method !== 'POST') { reply(405, 'Use POST for assistant speech.'); return }
-    if (!settings.apiKey || !settings.voiceId || !settings.accessCode) {
+    if (!settings.apiKey || !settings.voiceId) {
       reply(503, 'Add ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID to .env.local, then restart the dashboard.'); return
     }
-    const supplied = Buffer.from(String(req.headers['x-live-access-code'] ?? ''))
-    const expected = Buffer.from(settings.accessCode)
-    if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
-      reply(401, 'Enter the demo access code configured on the laptop.'); return
-    }
+    if (!settings.supabaseUrl || !settings.supabasePublishableKey) { reply(503, 'Account authorization is not configured on the server.'); return }
+    if (!await authorize(req)) { reply(401, 'Your account session expired. Sign in again to use assistant speech.'); return }
     if (Date.now() - windowStart > 60_000) { requests = 0; windowStart = Date.now() }
     if (++requests > 30) { reply(429, 'Too many speech requests. Wait a minute and try again.'); return }
     const controller = new AbortController()
