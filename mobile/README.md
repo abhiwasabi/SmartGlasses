@@ -31,7 +31,7 @@ cd 'C:\Users\leona\Documents\Codex\2026-09-26\https-github-com-abhiwasabi-smartg
 npm start -- --lan
 ```
 
-Scan Expo's QR code with Expo Go. This project uses Expo SDK 54 for compatibility with current App Store Expo Go on iPhone.
+Scan Expo's QR code with Expo Go. This project uses Expo SDK 57. On Android, install the SDK 57 version of Expo Go from Google Play or [Expo's download page](https://expo.dev/go?device=true&platform=android&sdkVersion=57). An older Expo Go version will report an SDK mismatch.
 
 ## Connect the phone
 
