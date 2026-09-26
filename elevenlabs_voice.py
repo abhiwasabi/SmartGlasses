@@ -1,4 +1,6 @@
 import os
+import shutil
+from pathlib import Path
 
 from dotenv import load_dotenv
 from elevenlabs import stream
@@ -22,6 +24,12 @@ client = ElevenLabs(api_key=API_KEY)
 
 
 def speak(text: str):
+    if os.name == "nt" and shutil.which("mpv") is None:
+        program_files = Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
+        installed_mpv = program_files / "MPV Player" / "mpv.exe"
+        if installed_mpv.is_file():
+            os.environ["PATH"] = str(installed_mpv.parent) + os.pathsep + os.environ.get("PATH", "")
+
     print(f"LaneTalk: {text}")
 
     audio_stream = client.text_to_speech.stream(
