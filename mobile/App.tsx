@@ -14,16 +14,17 @@ import { assist, checkServer } from './src/api';
 import { defaults, loadMemories, loadNotes, loadSettings, Memory, Note, saveMemories, saveNotes, saveSettings, Settings } from './src/storage';
 
 type Tab = 'Assist' | 'Notes' | 'Memories' | 'Settings';
-const nav: { name: Tab; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { name: 'Assist', icon: 'scan-outline' }, { name: 'Notes', icon: 'document-text-outline' },
-  { name: 'Memories', icon: 'albums-outline' }, { name: 'Settings', icon: 'options-outline' },
+const nav: { name: Tab; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { name: 'Assist', label: 'Overview', icon: 'grid-outline' }, { name: 'Notes', label: 'Notes', icon: 'document-text-outline' },
+  { name: 'Memories', label: 'Memories', icon: 'bookmark-outline' }, { name: 'Settings', label: 'Settings', icon: 'options-outline' },
 ];
-const c = { bg: '#0B1016', card: '#151E27', card2: '#1C2934', text: '#EDF5F3', muted: '#95A8AD', accent: '#B5F271', line: '#2B3941' };
+// Match the desktop dashboard's neutral surfaces, black navigation and coral actions.
+const c = { bg: '#FFFFFF', card: '#F7F7F7', card2: '#FFFFFF', text: '#151515', muted: '#858585', accent: '#DF6348', line: '#EAEAEA', black: '#111111', gray: '#EDEDED', blush: '#F8E9E4' };
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Please try again.';
 
-function Button({ label, icon, onPress, alt, disabled }: { label: string; icon?: keyof typeof Ionicons.glyphMap; onPress: () => void; alt?: boolean; disabled?: boolean }) {
-  return <Pressable disabled={disabled} onPress={onPress} style={[s.button, alt && s.buttonAlt, disabled && { opacity: 0.45 }]}>
-    {icon && <Ionicons name={icon} size={17} color={alt ? c.text : c.bg} />}<Text style={[s.buttonText, alt && { color: c.text }]}>{label}</Text>
+function Button({ label, icon, onPress, alt, dark, disabled }: { label: string; icon?: keyof typeof Ionicons.glyphMap; onPress: () => void; alt?: boolean; dark?: boolean; disabled?: boolean }) {
+  return <Pressable disabled={disabled} onPress={onPress} style={[s.button, alt && s.buttonAlt, dark && s.buttonDark, disabled && { opacity: 0.45 }]}>
+    {icon && <Ionicons name={icon} size={17} color={alt ? c.text : '#FFFFFF'} />}<Text style={[s.buttonText, alt && { color: c.text }]}>{label}</Text>
   </Pressable>;
 }
 function Card({ children }: { children: React.ReactNode }) { return <View style={s.card}>{children}</View>; }
@@ -162,38 +163,59 @@ function MobileApp() {
   const suggestedHost = Constants.expoConfig?.hostUri?.split(':')[0];
 
   return <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
-    <StatusBar barStyle="light-content" backgroundColor={c.bg} />
-    <View style={s.header}><View><Text style={s.eyebrow}>SMARTGLASSES / MOBILE</Text><Text style={s.title}>{tab}</Text></View><View style={s.logo}><Ionicons name="sparkles" size={21} color={c.bg} /></View></View>
+    <StatusBar barStyle="dark-content" backgroundColor={c.card} />
+    <View style={s.header}>
+      <View style={s.brandRow}><View style={s.logo}><Ionicons name="glasses-outline" size={22} color="#FFFFFF" /></View><Text style={s.brand}>clarity<Text style={s.brandDot}>.</Text></Text></View>
+      <View style={s.headerCopy}><Text style={s.headerName}>SmartGlasses</Text><Text style={s.headerSubtitle}>{tab === 'Assist' ? 'Overview dashboard' : tab}</Text></View>
+    </View>
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       {tab === 'Assist' && <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
-        <View style={s.goal}><Ionicons name="navigate-outline" size={18} color={c.accent} /><Text style={s.goalText}>{settings.goal}</Text></View>
-        <View style={s.camera}>
-          {cameraPermission?.granted ? <CameraView key={`${mode}-${facing}`} ref={camera} style={StyleSheet.absoluteFill} facing={facing} mode={mode} mute={false} onCameraReady={() => setCameraReady(true)} onMountError={event => setScene(event.message)} />
-            : <View style={s.cameraEmpty}><Ionicons name="camera-outline" size={42} color={c.muted} /><Text style={s.muted}>Camera access is needed to understand the scene.</Text><Button label="Allow camera" onPress={() => { askCamera().catch(report); }} /></View>}
-          <View style={s.cameraTop}><Text style={s.badge}>{recordingVideo ? '● RECORDING' : mode === 'picture' ? 'LIVE VIEW' : 'VIDEO MODE'}</Text><Pressable style={s.flip} onPress={() => { setCameraReady(false); setFacing(facing === 'back' ? 'front' : 'back'); }}><Ionicons name="camera-reverse-outline" size={20} color={c.text} /></Pressable></View>
-        </View>
-        <View style={s.row}><Button label="Photo + AI" onPress={() => { if (!recordingVideo && mode !== 'picture') { setCameraReady(false); setMode('picture'); } }} alt={mode !== 'picture'} /><Button label="Video memory" onPress={() => { if (!recordingVideo && mode !== 'video') { setCameraReady(false); setMode('video'); } }} alt={mode !== 'video'} /></View>
-        {mode === 'picture' ? <View style={s.row}><Button label={busy ? 'Thinking…' : 'Scan scene'} icon="scan-outline" onPress={() => { scan().catch(report); }} disabled={busy || !cameraReady} /><Button label="Save photo" icon="camera-outline" alt onPress={() => { photoMemory().catch(report); }} disabled={!cameraReady} /></View>
-          : <Button label={recordingVideo ? 'Stop recording' : 'Record up to 30 seconds'} icon={recordingVideo ? 'stop-circle-outline' : 'radio-button-on-outline'} onPress={() => { videoMemory().catch(report); }} disabled={!cameraReady && !recordingVideo} />}
-        <Card><Text style={s.label}>SCENE SIGNAL</Text><Text style={s.body}>{scene}</Text><Text style={s.hint}>Alerts are based on visible camera details. Keep your attention on the real world.</Text></Card>
-        <Card><Text style={s.label}>ASK ABOUT WHAT YOU SEE</Text><TextInput style={[s.input, { minHeight: 66 }]} value={question} onChangeText={setQuestion} placeholder="What is in front of me?" placeholderTextColor={c.muted} multiline />
-          <View style={s.row}><Button label={busy ? 'Thinking…' : 'Ask Gemini'} icon="arrow-up-outline" onPress={() => { ask().catch(report); }} disabled={busy || !question.trim()} /><Button label={recordingVoice === 'question' ? 'Finish' : 'Speak'} icon={recordingVoice === 'question' ? 'stop-outline' : 'mic-outline'} alt onPress={() => { voice('question').catch(report); }} disabled={busy || (recordingVoice !== null && recordingVoice !== 'question')} /></View>
-          {!!answer && <View style={s.answer}><Text style={s.body}>{answer}</Text><Pressable onPress={() => Speech.stop()}><Text style={s.link}>Stop voice</Text></Pressable></View>}</Card>
+        <Card>
+          <View style={s.panelHeader}><View style={s.panelIcon}><Ionicons name="sparkles-outline" size={22} color={c.black} /></View><View style={{ flex: 1 }}><Text style={s.panelHeading}>Ask your glasses</Text><Text style={s.hint}>Talk with Gemini about what your camera sees.</Text></View></View>
+          <TextInput style={[s.input, { minHeight: 64 }]} value={question} onChangeText={setQuestion} placeholder="What am I looking at?" placeholderTextColor={c.muted} multiline />
+          <View style={s.row}><Button label={busy ? 'Thinking…' : 'Ask Gemini'} icon="arrow-up-outline" onPress={() => { ask().catch(report); }} disabled={busy || !question.trim()} /><Button label={recordingVoice === 'question' ? 'Finish speaking' : 'Speak instead'} icon={recordingVoice === 'question' ? 'stop-outline' : 'mic-outline'} dark onPress={() => { voice('question').catch(report); }} disabled={busy || (recordingVoice !== null && recordingVoice !== 'question')} /></View>
+          {!!answer && <View style={s.answer}><Text style={s.body}>{answer}</Text><Pressable onPress={() => Speech.stop()}><Text style={s.link}>Stop voice</Text></Pressable></View>}
+        </Card>
+        <Card>
+          <View style={s.panelHeader}><View style={s.panelIcon}><Ionicons name="mic-outline" size={24} color={c.black} /></View><View style={{ flex: 1 }}><Text style={s.label}>MADE FOR HANDS-FREE MOMENTS</Text><Text style={s.heroHeading}>Just say the word.</Text><Text style={s.hint}>Capture a thought or a moment without a keyboard.</Text></View></View>
+          <View style={s.quickActions}><View style={s.quickAction}><Ionicons name="mic-outline" size={18} color={c.accent} /><Text style={s.quickActionText}>Ask by voice</Text></View><View style={s.quickAction}><Ionicons name="document-text-outline" size={18} color={c.accent} /><Text style={s.quickActionText}>Dictate a note</Text></View><View style={s.quickAction}><Ionicons name="videocam-outline" size={18} color={c.accent} /><Text style={s.quickActionText}>Save a moment</Text></View></View>
+        </Card>
+        <Card>
+          <Text style={s.panelHeading}>What are you trying to do?</Text><Text style={s.hint}>Give the assistant a goal so it can judge what the camera notices.</Text>
+          <Text style={s.field}>Your goal</Text><TextInput style={s.input} value={settings.goal} onChangeText={goal => change({ goal })} placeholder="Find a trash bin, locate a door…" placeholderTextColor={c.muted} multiline />
+          <View style={s.row}><Button label="Set goal" onPress={() => { persist().catch(report); }} /><Button label={busy ? 'Scanning…' : 'Scan once'} icon="scan-outline" alt onPress={() => { scan().catch(report); }} disabled={busy || !cameraReady || mode !== 'picture'} /></View>
+          <View style={s.statusLine}><View style={s.statusDot} /><Text style={s.hint}>{settings.autoScan ? 'Automatic scanning is on' : 'Local assistant ready · safety alerts remain active'}</Text></View>
+          <Text style={s.body}>{scene}</Text>
+        </Card>
+        <Card>
+          <View style={s.panelHeader}><View style={s.panelIcon}><Ionicons name="videocam-outline" size={22} color={c.black} /></View><View style={{ flex: 1 }}><Text style={s.panelHeading}>Your perspective</Text><Text style={s.hint}>A window into your everyday.</Text></View><Text style={s.hint}>{cameraReady ? 'Camera ready' : 'Camera offline'}</Text></View>
+          <View style={s.sourcePill}><Ionicons name="camera-outline" size={15} color="#FFFFFF" /><Text style={s.sourceText}>This device</Text></View>
+          <View style={s.camera}>
+            {cameraPermission?.granted ? <CameraView key={`${mode}-${facing}`} ref={camera} style={StyleSheet.absoluteFill} facing={facing} mode={mode} mute={false} onCameraReady={() => setCameraReady(true)} onMountError={event => setScene(event.message)} />
+              : <View style={s.cameraEmpty}><View style={s.panelIcon}><Ionicons name="glasses-outline" size={27} color={c.black} /></View><Text style={s.panelHeading}>Your camera view will appear here.</Text><Text style={s.hint}>Allow the camera to preview and capture your surroundings.</Text><Button label="Allow camera" icon="camera-outline" dark onPress={() => { askCamera().catch(report); }} /></View>}
+            <View style={s.cameraTop}><Text style={s.badge}>{recordingVideo ? '● RECORDING' : mode === 'picture' ? 'LIVE VIEW' : 'VIDEO MODE'}</Text><Pressable style={s.flip} onPress={() => { setCameraReady(false); setFacing(facing === 'back' ? 'front' : 'back'); }}><Ionicons name="camera-reverse-outline" size={20} color={c.text} /></Pressable></View>
+          </View>
+          <View style={s.row}><Button label="Photo + AI" onPress={() => { if (!recordingVideo && mode !== 'picture') { setCameraReady(false); setMode('picture'); } }} dark={mode === 'picture'} alt={mode !== 'picture'} /><Button label="Video memory" onPress={() => { if (!recordingVideo && mode !== 'video') { setCameraReady(false); setMode('video'); } }} dark={mode === 'video'} alt={mode !== 'video'} /></View>
+          {mode === 'picture' ? <View style={s.row}><Button label="Save photo" icon="camera-outline" alt onPress={() => { photoMemory().catch(report); }} disabled={!cameraReady} /><Button label={busy ? 'Scanning…' : 'Scan scene'} icon="scan-outline" onPress={() => { scan().catch(report); }} disabled={busy || !cameraReady} /></View>
+            : <Button label={recordingVideo ? 'Stop recording' : 'Record up to 30 seconds'} icon={recordingVideo ? 'stop-circle-outline' : 'radio-button-on-outline'} onPress={() => { videoMemory().catch(report); }} disabled={!cameraReady && !recordingVideo} />}
+        </Card>
+        <Card><View style={s.panelHeader}><View style={s.panelIcon}><Ionicons name="document-text-outline" size={23} color={c.accent} /></View><View style={{ flex: 1 }}><Text style={s.panelHeading}>Voice notes</Text><Text style={s.hint}>Speak a thought. Keep it here.</Text></View></View><Button label="Dictate a note" icon="mic-outline" onPress={() => setTab('Notes')} /></Card>
+        <Card><View style={s.panelHeader}><View style={s.panelIcon}><Ionicons name="bookmark-outline" size={23} color={c.accent} /></View><View style={{ flex: 1 }}><Text style={s.panelHeading}>Worth remembering · {memories.length}</Text><Text style={s.hint}>Small moments. A bigger picture.</Text></View></View><Button label="View all memories" icon="arrow-forward-outline" alt onPress={() => setTab('Memories')} /></Card>
       </ScrollView>}
-      {tab === 'Notes' && <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled"><Text style={s.intro}>Capture an idea quickly. Dictated notes are transcribed by Gemini and saved on this phone.</Text>
-        <Card><Text style={s.label}>NEW NOTE</Text><TextInput style={[s.input, { minHeight: 95 }]} value={noteDraft} onChangeText={setNoteDraft} placeholder="What should you remember?" placeholderTextColor={c.muted} multiline />
+      {tab === 'Notes' && <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled"><Text style={s.section}>Voice notes</Text><Text style={s.intro}>Speak a thought. Keep it here. Dictated notes are transcribed by Gemini and saved on this phone.</Text>
+        <Card><View style={s.panelHeader}><View style={s.panelIcon}><Ionicons name="document-text-outline" size={23} color={c.accent} /></View><View style={{ flex: 1 }}><Text style={s.panelHeading}>Your voice, put into words.</Text><Text style={s.hint}>Write it down or dictate a new note.</Text></View></View><TextInput style={[s.input, { minHeight: 95 }]} value={noteDraft} onChangeText={setNoteDraft} placeholder="What should you remember?" placeholderTextColor={c.muted} multiline />
           <View style={s.row}><Button label="Save note" icon="checkmark-outline" onPress={() => { addNote(noteDraft).catch(report); }} disabled={!noteDraft.trim()} /><Button label={recordingVoice === 'note' ? 'Finish' : 'Dictate'} icon={recordingVoice === 'note' ? 'stop-outline' : 'mic-outline'} alt onPress={() => { voice('note').catch(report); }} disabled={busy || (recordingVoice !== null && recordingVoice !== 'note')} /></View></Card>
         <Text style={s.section}>Your notes · {notes.length}</Text>{notes.length === 0 ? <Text style={s.muted}>No notes yet.</Text> : notes.map(note => <Card key={note.id}><View style={s.between}><Text style={s.muted}>{new Date(note.createdAt).toLocaleString()}</Text><Pressable onPress={() => Alert.alert('Delete note?', 'This removes the note from this phone.', [{ text: 'Cancel' }, { text: 'Delete', style: 'destructive', onPress: () => { const next = notes.filter(item => item.id !== note.id); saveNotes(next).then(() => setNotes(next)).catch(report); } }])}><Ionicons name="trash-outline" size={18} color={c.muted} /></Pressable></View><Text style={s.body}>{note.text}</Text></Card>)}
       </ScrollView>}
-      {tab === 'Memories' && <ScrollView contentContainerStyle={s.scroll}><Text style={s.intro}>Photos and short videos stay in this app’s local storage. Share one when you choose.</Text>
+      {tab === 'Memories' && <ScrollView contentContainerStyle={s.scroll}><Text style={s.section}>Worth remembering · {memories.length}</Text><Text style={s.intro}>Small moments. A bigger picture. Photos and short videos stay on this phone.</Text>
         {selected ? <><Pressable onPress={() => setSelected(null)} style={s.row}><Ionicons name="arrow-back" size={18} color={c.accent} /><Text style={s.link}>All memories</Text></Pressable>{selected.kind === 'photo' ? <Image source={{ uri: selected.uri }} style={s.viewer} resizeMode="contain" /> : <VideoPlayer uri={selected.uri} />}<Text style={s.muted}>{new Date(selected.createdAt).toLocaleString()}</Text><Button label="Share memory" icon="share-outline" onPress={() => { share(selected).catch(report); }} /></>
-          : memories.length === 0 ? <Card><Ionicons name="albums-outline" size={34} color={c.accent} /><Text style={s.body}>No memories yet. Take a photo or record a video on Assist.</Text></Card>
+          : memories.length === 0 ? <Card><View style={s.panelIcon}><Ionicons name="bookmark-outline" size={29} color={c.accent} /></View><Text style={s.panelHeading}>Your next memory starts here.</Text><Text style={s.body}>Take a photo or record a video on Overview.</Text><Button label="Open camera" onPress={() => setTab('Assist')} /></Card>
             : memories.map(item => <Pressable key={item.id} onPress={() => setSelected(item)} style={s.memory}>{item.kind === 'photo' ? <Image source={{ uri: item.uri }} style={s.thumb} /> : <View style={[s.thumb, s.videoThumb]}><Ionicons name="videocam-outline" size={26} color={c.accent} /></View>}<View style={{ flex: 1 }}><Text style={s.body}>{item.kind === 'photo' ? 'Photo memory' : 'Video memory'}</Text><Text style={s.muted}>{new Date(item.createdAt).toLocaleString()}</Text></View><Ionicons name="chevron-forward" size={19} color={c.muted} /></Pressable>)}
       </ScrollView>}
       {tab === 'Settings' && <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled"><Text style={s.intro}>Connect to the companion service on your laptop. Keep your phone and laptop on the same Wi-Fi.</Text>
         <Card><Text style={s.label}>LAPTOP CONNECTION</Text><Text style={s.field}>Service URL</Text><TextInput style={s.input} value={settings.serverUrl} onChangeText={serverUrl => change({ serverUrl })} placeholder="http://192.168.1.20:8766" placeholderTextColor={c.muted} autoCapitalize="none" keyboardType="url" />
           {!!suggestedHost && <Pressable onPress={() => change({ serverUrl: `http://${suggestedHost}:8766` })}><Text style={s.link}>Use Expo host: {suggestedHost}</Text></Pressable>}
-          <Text style={s.field}>Mobile access code</Text><TextInput style={s.input} value={settings.accessCode} onChangeText={accessCode => change({ accessCode })} placeholder="Code from mobile/.env.local" placeholderTextColor={c.muted} secureTextEntry autoCapitalize="none" />
+          <Text style={s.field}>Mobile access code</Text><TextInput style={s.input} value={settings.accessCode} onChangeText={accessCode => change({ accessCode })} placeholder="Code from mobile/server/.env.local" placeholderTextColor={c.muted} secureTextEntry autoCapitalize="none" />
           <View style={s.row}><Button label="Save" icon="save-outline" onPress={() => { persist().catch(report); }} /><Button label="Test" icon="pulse-outline" alt onPress={() => { check().catch(report); }} /></View><Text style={s.hint}>{connection}</Text></Card>
         <Card><Text style={s.label}>ASSISTANT BEHAVIOR</Text><Text style={s.field}>What are you trying to do?</Text><TextInput style={[s.input, { minHeight: 78 }]} value={settings.goal} onChangeText={goal => change({ goal })} placeholder="e.g. Find a trash bin" placeholderTextColor={c.muted} multiline />
           <View style={s.between}><View><Text style={s.body}>Scan automatically</Text><Text style={s.hint}>Every 7 seconds on Assist</Text></View><Switch value={settings.autoScan} onValueChange={autoScan => change({ autoScan })} trackColor={{ true: c.accent }} /></View>
@@ -201,19 +223,62 @@ function MobileApp() {
         <Text style={s.hint}>The Gemini API key stays on your laptop. Camera frames and recorded questions are sent to that service when you request help.</Text>
       </ScrollView>}
     </KeyboardAvoidingView>
-    <View style={s.nav}>{nav.map(item => <Pressable key={item.name} onPress={() => { if (!recordingVideo && !recordingVoice) { setTab(item.name); setSelected(null); setCameraReady(false); } }} style={s.navItem}><Ionicons name={item.icon} size={22} color={tab === item.name ? c.accent : c.muted} /><Text style={[s.navText, tab === item.name && { color: c.accent }]}>{item.name}</Text></Pressable>)}</View>
+    <View style={s.nav}>{nav.map(item => <Pressable key={item.name} onPress={() => { if (!recordingVideo && !recordingVoice) { setTab(item.name); setSelected(null); setCameraReady(false); } }} style={[s.navItem, tab === item.name && s.navActive]}><Ionicons name={item.icon} size={19} color={tab === item.name ? '#FFFFFF' : c.muted} /><Text style={[s.navText, tab === item.name && s.navTextActive]}>{item.label}</Text></Pressable>)}</View>
   </SafeAreaView>;
 }
 export default function App() { return <SafeAreaProvider><MobileApp /></SafeAreaProvider>; }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: c.bg }, header: { paddingHorizontal: 22, paddingTop: 14, paddingBottom: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, eyebrow: { color: c.accent, fontSize: 10, fontWeight: '800', letterSpacing: 2 }, title: { color: c.text, fontSize: 29, fontWeight: '800', marginTop: 3 }, logo: { width: 40, height: 40, borderRadius: 13, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center' },
-  scroll: { paddingHorizontal: 18, paddingBottom: 32, gap: 15 }, intro: { color: c.muted, fontSize: 15, lineHeight: 22, marginBottom: 6 }, section: { color: c.text, fontSize: 21, fontWeight: '800', marginTop: 8 }, muted: { color: c.muted, fontSize: 12 },
-  goal: { flexDirection: 'row', alignItems: 'center', gap: 11, backgroundColor: c.card, borderRadius: 15, borderWidth: 1, borderColor: c.line, padding: 14 }, goalText: { color: c.text, flex: 1, fontSize: 14, fontWeight: '600' },
-  camera: { height: 265, borderRadius: 22, overflow: 'hidden', backgroundColor: c.card2 }, cameraEmpty: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 14, padding: 20 }, cameraTop: { position: 'absolute', top: 12, left: 12, right: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, badge: { color: c.text, backgroundColor: '#0B1016BB', overflow: 'hidden', borderRadius: 8, paddingHorizontal: 9, paddingVertical: 7, fontWeight: '800', letterSpacing: 1, fontSize: 10 }, flip: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#0B1016BB', alignItems: 'center', justifyContent: 'center' },
-  row: { flexDirection: 'row', gap: 10, alignItems: 'center', flexWrap: 'wrap' }, button: { minHeight: 44, borderRadius: 13, backgroundColor: c.accent, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 }, buttonAlt: { backgroundColor: c.card2, borderWidth: 1, borderColor: c.line }, buttonText: { color: c.bg, fontWeight: '800', fontSize: 13 },
-  card: { borderRadius: 20, backgroundColor: c.card, borderWidth: 1, borderColor: c.line, padding: 17, gap: 12 }, label: { color: c.accent, fontSize: 11, fontWeight: '800', letterSpacing: 1.5 }, body: { color: c.text, fontSize: 15, lineHeight: 22 }, hint: { color: c.muted, fontSize: 12, lineHeight: 18 }, field: { color: c.text, fontSize: 13, fontWeight: '700', marginTop: 4 },
-  input: { color: c.text, backgroundColor: c.bg, borderWidth: 1, borderColor: c.line, borderRadius: 12, paddingHorizontal: 13, paddingVertical: 11, fontSize: 14, textAlignVertical: 'top' }, answer: { borderTopWidth: 1, borderColor: c.line, paddingTop: 13, gap: 9 }, link: { color: c.accent, fontSize: 13, fontWeight: '700' }, between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  memory: { flexDirection: 'row', gap: 13, alignItems: 'center', padding: 10, borderRadius: 17, backgroundColor: c.card, borderWidth: 1, borderColor: c.line }, thumb: { width: 68, height: 68, borderRadius: 11 }, videoThumb: { backgroundColor: c.card2, alignItems: 'center', justifyContent: 'center' }, viewer: { height: 360, width: '100%', backgroundColor: '#000', borderRadius: 17 },
-  nav: { flexDirection: 'row', borderTopColor: c.line, borderTopWidth: 1, backgroundColor: c.bg, paddingTop: 10, paddingBottom: 4 }, navItem: { flex: 1, alignItems: 'center', gap: 4 }, navText: { color: c.muted, fontSize: 10, fontWeight: '700' },
+  safe: { flex: 1, backgroundColor: c.bg },
+  header: { minHeight: 84, paddingHorizontal: 18, paddingVertical: 14, backgroundColor: c.card, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  logo: { width: 42, height: 42, borderRadius: 21, backgroundColor: c.black, alignItems: 'center', justifyContent: 'center' },
+  brand: { color: c.black, fontSize: 24, fontWeight: '800', letterSpacing: -1.4 },
+  brandDot: { color: c.accent },
+  headerCopy: { flex: 1, alignItems: 'flex-end' },
+  headerName: { color: c.black, fontSize: 14, fontWeight: '600' },
+  headerSubtitle: { color: c.muted, fontSize: 11, marginTop: 2 },
+  scroll: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 34, gap: 16 },
+  intro: { color: c.muted, fontSize: 14, lineHeight: 21, marginBottom: 4 },
+  section: { color: c.text, fontSize: 23, fontWeight: '500', letterSpacing: -0.7, marginTop: 5 },
+  muted: { color: c.muted, fontSize: 12 },
+  card: { borderRadius: 28, backgroundColor: c.card, padding: 20, gap: 14 },
+  panelHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  panelIcon: { width: 46, height: 46, borderRadius: 23, backgroundColor: c.card2, alignItems: 'center', justifyContent: 'center' },
+  panelHeading: { color: c.text, fontSize: 18, fontWeight: '600', letterSpacing: -0.5 },
+  heroHeading: { color: c.text, fontSize: 24, fontWeight: '500', letterSpacing: -0.8, marginVertical: 3 },
+  label: { color: c.muted, fontSize: 9, fontWeight: '700', letterSpacing: 1.3 },
+  body: { color: c.text, fontSize: 14, lineHeight: 21 },
+  hint: { color: c.muted, fontSize: 12, lineHeight: 18 },
+  field: { color: c.text, fontSize: 12, fontWeight: '600', marginTop: 3 },
+  row: { flexDirection: 'row', gap: 9, alignItems: 'center', flexWrap: 'wrap' },
+  button: { minHeight: 44, borderRadius: 24, backgroundColor: c.accent, paddingHorizontal: 17, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
+  buttonAlt: { backgroundColor: c.card2, borderWidth: 1, borderColor: c.line },
+  buttonDark: { backgroundColor: c.black },
+  buttonText: { color: '#FFFFFF', fontWeight: '600', fontSize: 12 },
+  input: { color: c.text, backgroundColor: c.card2, borderWidth: 1, borderColor: c.line, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, textAlignVertical: 'top' },
+  answer: { backgroundColor: c.card2, borderRadius: 19, padding: 15, gap: 9 },
+  link: { color: c.accent, fontSize: 13, fontWeight: '600' },
+  between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  quickActions: { flexDirection: 'row', gap: 7 },
+  quickAction: { flex: 1, minHeight: 71, backgroundColor: c.card2, borderRadius: 17, padding: 11, alignItems: 'flex-start', justifyContent: 'center', gap: 7 },
+  quickActionText: { color: c.text, fontSize: 10, fontWeight: '500' },
+  statusLine: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  statusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#526B5B' },
+  sourcePill: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: c.black, borderRadius: 20, paddingHorizontal: 13, paddingVertical: 8 },
+  sourceText: { color: '#FFFFFF', fontSize: 11, fontWeight: '600' },
+  camera: { height: 255, borderRadius: 23, overflow: 'hidden', backgroundColor: c.gray },
+  cameraEmpty: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 11, padding: 20 },
+  cameraTop: { position: 'absolute', top: 12, left: 12, right: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  badge: { color: '#555555', backgroundColor: '#FFFFFFE6', overflow: 'hidden', borderRadius: 18, paddingHorizontal: 10, paddingVertical: 7, fontWeight: '700', letterSpacing: 1, fontSize: 9 },
+  flip: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#FFFFFFE6', alignItems: 'center', justifyContent: 'center' },
+  memory: { flexDirection: 'row', gap: 13, alignItems: 'center', padding: 11, borderRadius: 22, backgroundColor: c.card2, borderWidth: 1, borderColor: c.line },
+  thumb: { width: 68, height: 68, borderRadius: 15 },
+  videoThumb: { backgroundColor: c.blush, alignItems: 'center', justifyContent: 'center' },
+  viewer: { height: 360, width: '100%', backgroundColor: '#000000', borderRadius: 22 },
+  nav: { flexDirection: 'row', backgroundColor: c.card, marginHorizontal: 12, marginBottom: 6, borderRadius: 25, padding: 6, gap: 3 },
+  navItem: { flex: 1, minHeight: 54, borderRadius: 20, alignItems: 'center', justifyContent: 'center', gap: 3 },
+  navActive: { backgroundColor: c.black },
+  navText: { color: c.muted, fontSize: 9, fontWeight: '600' },
+  navTextActive: { color: '#FFFFFF' },
 });
