@@ -161,7 +161,10 @@ backend proxy is needed for a phone or deployed dashboard.
 Run `python event_receiver.py` in the Shellhacks folder. It listens only on
 `http://127.0.0.1:8765`, so API keys stay in the local `.env`. The receiver
 accepts detected events from another process, applies the current activity and
-goal, and sends useful alerts to ElevenLabs. Check `GET /health` for readiness.
+goal, and sends useful alerts to ElevenLabs. On Windows, if ElevenLabs is
+unavailable, the assistant speaks through the installed Windows voice instead.
+An ElevenLabs 401 disables retries until the receiver restarts. Check
+`GET /health` for readiness.
 On this Windows laptop, make mpv available in that terminal first if it is not
 already on `PATH`: `$env:Path = 'C:\Program Files\MPV Player;' + $env:Path`.
 
@@ -192,4 +195,4 @@ video alone cannot provide object type, distance, or motion. The receiver is a
 single-user local prototype and processes one request at a time. A phone or
 deployed dashboard needs a trusted same-origin backend connection before it can
 use this receiver remotely. Run all offline checks with
-`python -m unittest -v test_gemini_integration.py test_live_integration.py`.
+`python -m unittest -v test_gemini_integration.py test_live_integration.py test_voice_fallback.py`.
