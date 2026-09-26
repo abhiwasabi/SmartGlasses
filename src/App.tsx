@@ -243,8 +243,8 @@ export default function App() {
       <main className="compact-page">
         <VoicePanel voice={voice} clipSeconds={isRecording && recordingKind.current === 'clip' ? Math.max(0, 30 - camera.elapsed) : null} />
         {storageError && <div className="storage-error" role="alert"><CloudOff size={17} />{storageError}</div>}
+        {(view === 'Overview' || view === 'Camera') && <AssistantGoal connected={isConnected} getVideo={() => previewRef.current?.querySelector('video') ?? null} />}
         {view === 'Overview' && <>
-          <AssistantGoal connected={isConnected} getVideo={() => previewRef.current?.querySelector('video') ?? null} />
           <div className="capture-grid">{cameraPanel}<section className="panel quick-notes"><div className="panel-heading"><div className="panel-title"><span className="heading-icon"><FileText size={18} /></span><div><h2>Voice notes</h2><p>Speak a thought. Keep it here.</p></div></div><button className="icon-button icon-button-bordered" aria-label="Dictate a new note" onClick={voice.beginNote}><Mic size={17} /></button></div>{noteEditor}<button className="all-notes-link" onClick={() => navigate('Notes')}><span><FolderOpen size={14} />All notes <span className="small-count">{notes.length}</span></span><ArrowRight size={15} /></button></section></div>
         </>}
         {view === 'Camera' && <><div className="full-camera">{cameraPanel}</div><div className="camera-info"><Wifi size={19} /><div><h3>Two cameras. Your point of view.</h3><p>Add the Wi-Fi address of each ESP32-CAM in settings, then choose a camera above. Recordings from the selected camera stay in this browser.</p></div><button className="button button-secondary" onClick={() => setModal('settings')}>Configure cameras <ArrowUpRight size={14} /></button></div></>}
