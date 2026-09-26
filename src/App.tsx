@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
-import { ArrowDownToLine, ArrowRight, ArrowUpRight, Bookmark, CalendarDays, Camera, Check, CheckCheck, CircleHelp, Clock3, CloudOff, Coffee, FileText, FolderOpen, Glasses, HardDrive, LayoutDashboard, Leaf, LoaderCircle, Maximize2, Menu, Mic, MicOff, Mountain, Plus, Radio, Search, Settings2, Square, Trash2, Video, Wifi, WifiOff, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowRight, ArrowUpRight, Bookmark, CalendarDays, Camera, Check, CheckCheck, CircleHelp, Clock3, CloudOff, Coffee, FileText, FolderOpen, Glasses, HardDrive, LayoutDashboard, Leaf, LoaderCircle, Maximize2, Menu, Mountain, Plus, Radio, Search, Settings2, Square, Trash2, Video, Wifi, WifiOff, X } from 'lucide-react'
 import { AssistantPanel } from './components/AssistantPanel'
 import { useGeminiLive } from './hooks/useGeminiLive'
 import { VoicePanel } from './components/VoicePanel'
@@ -93,6 +93,24 @@ export default function App() {
   const selectedNote = notes.find(note => note.id === selectedNoteId) ?? notes[0]
   const storageError = noteError || memoryError || settingsError
 
+  function saveVoiceNote(text: string, finished: boolean, suppliedTitle?: string) {
+    if (!text.trim()) return
+    const id = voiceNoteId.current ?? crypto.randomUUID()
+    voiceNoteId.current = id
+    const words = text.trim().split(/\s+/)
+    const title = suppliedTitle?.slice(0, 120) || words.slice(0, 8).join(' ').slice(0, 90) + (words.length > 8 ? '…' : '')
+    const note: Note = { id, title, body: text.trim(), tag: 'Voice note', updatedAt: new Date().toISOString() }
+    setNotes(previous => previous.some(item => item.id === id) ? previous.map(item => item.id === id ? note : item) : [note, ...previous])
+    setSelectedNoteId(id)
+    if (finished) { voiceNoteId.current = null; notify('Voice note saved.') }
+  }
+  function cancelVoiceNote() {
+    const id = voiceNoteId.current
+    if (id) setNotes(previous => previous.filter(note => note.id !== id))
+    voiceNoteId.current = null
+    notify('Voice note discarded.')
+  }
+
   const voice = useVoiceControl({
     onAction(action) {
       if (action === 'record' || action === 'clip') requestCapture(action)
@@ -103,37 +121,63 @@ export default function App() {
       }
     },
     onNote(text, finished) {
-      if (!text.trim()) return
-      const id = voiceNoteId.current ?? crypto.randomUUID()
-      voiceNoteId.current = id
-      const words = text.trim().split(/\s+/)
-      const title = words.slice(0, 8).join(' ').slice(0, 90) + (words.length > 8 ? '…' : '')
-      const note: Note = { id, title, body: text, tag: 'Voice note', updatedAt: new Date().toISOString() }
-      setNotes(previous => previous.some(item => item.id === id) ? previous.map(item => item.id === id ? note : item) : [note, ...previous])
-      setSelectedNoteId(id)
-      if (finished) { voiceNoteId.current = null; notify('Voice note saved.') }
+      saveVoiceNote(text, finished)
     },
     onCancelNote() {
-      const id = voiceNoteId.current
-      if (id) setNotes(previous => previous.filter(note => note.id !== id))
-      voiceNoteId.current = null
-      notify('Voice note discarded.')
+      cancelVoiceNote()
     },
   })
 
-  const assistant = useGeminiLive(camera.stream, voice.microphoneId, voice.stop)
-  const startVoice = () => { assistant.stop(); return voice.start() }
-  const dictateNote = () => { assistant.stop(); voice.beginNote() }
-  const voiceControls = { ...voice, start: startVoice, beginNote: dictateNote }
+  const assistant = useGeminiLive(camera.stream, voice.microphoneId, voice.stop, {
+    onCommand(command) {
+      if (command === 'start_recording') return requestCapture('record')
+      if (command === 'clip_memory') return requestCapture('clip')
+      if (captureIntent.current) { captureIntent.current = null; setPendingCapture(null); camera.disconnect(); notify('Pending recording cancelled.'); return 'The pending capture was cancelled.' }
+      if (isRecording) { camera.stopRecording(); notify('Finishing your recording…'); return 'Recording stopped and is being saved.' }
+      notify('There is no recording in progress.')
+      return 'No recording is currently in progress.'
+    },
+    onNote: saveVoiceNote,
+    onCancelNote: cancelVoiceNote,
+    onNoteMode(active) { if (active) notify('Gemini is taking a note. Say “save note” to finish or “cancel note” to discard.') },
+  })
 
-  function requestCapture(kind: 'record' | 'clip') {
-    if (isRecording || camera.status === 'saving' || captureIntent.current) { notify('A recording is already in progress. Say “stop recording” to finish it.'); return }
-    if (source !== 'browser' && !settings[source]) { notify('Set your camera address once in Settings, or choose This device. Then try the command again.'); setModal('settings'); return }
+  function requestCapture(kind: 'record' | 'clip'): string {
+    if (isRecording || camera.status === 'saving' || captureIntent.current) { notify('A recording is already in progress. Say “stop recording” to finish it.'); return 'A recording is already in progress. Do not start another one.' }
+    let captureCamera = camera
+    if (source !== 'browser' && !settings[source]) {
+      if (kind === 'clip' && browserCamera.status !== 'ready') {
+        notify('Connect a camera and leave it connected for 30 seconds before clipping a memory.')
+        return 'A camera must be connected and have a full 30-second buffer before a memory can be clipped.'
+      }
+      captureCamera = browserCamera
+      setSource('browser')
+      if (kind === 'record') notify('External camera is not configured. Using this device camera instead…')
+    }
+    if (kind === 'clip') {
+      if (captureCamera.status !== 'ready') {
+        notify('Connect the camera and wait 30 seconds before clipping a memory.')
+        return 'Connect the camera and wait 30 seconds so Clarity can buffer the past before clipping.'
+      }
+      recordingKind.current = 'clip'
+      captureIntent.current = 'clip'
+      notify('Saving the previous 30 seconds…')
+      void captureCamera.clipPast30Seconds().then(result => {
+        captureIntent.current = null
+        if (!result.ok) { recordingKind.current = null; notify(result.message) }
+      }).catch(() => {
+        captureIntent.current = null
+        recordingKind.current = null
+        notify('The recent footage could not be saved. Reconnect the camera and try again.')
+      })
+      return 'Saving the previous 30 seconds now. Do not say it captured future footage.'
+    }
     recordingKind.current = kind
     captureIntent.current = kind
     setPendingCapture(kind)
-    if (camera.status === 'disconnected') void camera.connect()
-    notify(camera.status === 'ready' ? kind === 'clip' ? 'Starting a 30-second memory clip…' : 'Starting your recording…' : 'Connecting your camera before recording…')
+    if (captureCamera.status === 'disconnected') void captureCamera.connect()
+    if (source === 'browser' || settings[source]) notify(captureCamera.status === 'ready' ? 'Starting your recording…' : 'Connecting your camera before recording…')
+    return captureCamera.status === 'ready' ? 'The capture is starting. Do not say it is saved yet.' : 'The camera is connecting before capture starts. Do not say it is saved yet.'
   }
   useEffect(() => {
     if (!pendingCapture) return
@@ -219,7 +263,7 @@ export default function App() {
       <input className="note-title" aria-label="Note title" maxLength={120} value={selectedNote.title} readOnly={voice.mode === 'dictating' && selectedNote.id === voiceNoteId.current} onChange={event => updateNote({ title: event.target.value })} placeholder="Give your thought a title" />
       <textarea className="note-body" aria-label="Note text" value={selectedNote.body} readOnly={voice.mode === 'dictating' && selectedNote.id === voiceNoteId.current} onChange={event => updateNote({ body: event.target.value })} placeholder="A thought, a detail, a little thing to remember…" />
       <div className="note-editor-footer"><span>{noteError ? <><CloudOff size={13} /> Unsaved</> : <><CheckCheck size={14} /> Saved on this device</>}</span><span>{selectedNote.body.trim() ? selectedNote.body.trim().split(/\s+/).length : 0} words</span></div>
-    </div> : <div className="empty-state"><FileText size={30} /><h3>Your voice, put into words.</h3><p>Say “make a new note”, then speak your thought.</p><button className="button button-primary" onClick={dictateNote}><Mic size={15} /> Dictate a note</button></div>}
+    </div> : <div className="empty-state"><FileText size={30} /><h3>Your notes will live here.</h3><p>Write a note from the Notes section, or ask Gemini to make one by voice.</p></div>}
   </>
   const cameraPanel = <section className="panel camera-panel">
     <div className="panel-heading"><div className="panel-title"><span className="heading-icon"><Video size={19} /></span><div><h2>Your perspective</h2><p>A window into your everyday.</p></div></div><span className={`connection-label ${isConnected ? 'connected' : ''}`}><span className="status-dot" />{isRecording ? 'Recording' : isConnected ? 'Camera connected' : 'Camera offline'}</span></div>
@@ -245,24 +289,26 @@ export default function App() {
       <button className="nav-item secondary-nav" onClick={() => setModal('settings')}><Settings2 size={18} />Settings</button><button className="nav-item secondary-nav" onClick={() => setModal('help')}><CircleHelp size={18} />A little help</button><div className="sidebar-profile"><div className="avatar">A</div><div><strong>My workspace</strong><span>Made for your everyday</span></div><span className="profile-local" title="Local workspace"><HardDrive size={15} /></span></div></div>
     </aside>
     <div className="workspace">
-      <header className="topbar compact-header"><div className="breadcrumb"><button className="icon-button mobile-menu" aria-label="Open navigation" onClick={() => setSidebarOpen(true)}><Menu size={20} /></button><Glasses size={19} strokeWidth={1.5} /><span className="breadcrumb-slash">/</span><span className="dashboard-title"><strong>SmartGlasses</strong><span>{view} dashboard</span></span></div><div className="topbar-actions"><button aria-label={voice.status === 'off' ? 'Enable voice' : 'Pause microphone'} className={`topbar-voice ${voice.status === 'listening' ? 'active' : ''}`} onClick={voice.status === 'off' ? startVoice : voice.stop}>{voice.status === 'off' ? <MicOff size={14} /> : <Mic size={14} />}<span>{voice.status === 'listening' ? 'Voice is listening' : voice.status === 'starting' ? 'Connecting microphone' : 'Voice is off'}</span></button><span className="topbar-divider" /><span className="local-indicator"><span className="status-dot" />Local workspace</span><div className="avatar avatar-small">A</div><span className="today-date"><span className="date-number">{new Date().getDate()}</span><span className="date-description">{new Date().toLocaleDateString('en-US', { weekday: 'short' })},<br />{new Date().toLocaleDateString('en-US', { month: 'long' })}</span></span></div></header>
+      <header className="topbar compact-header"><div className="breadcrumb"><button className="icon-button mobile-menu" aria-label="Open navigation" onClick={() => setSidebarOpen(true)}><Menu size={20} /></button><Glasses size={19} strokeWidth={1.5} /><span className="breadcrumb-slash">/</span><span className="dashboard-title"><strong>SmartGlasses</strong><span>{view} dashboard</span></span></div><div className="topbar-actions"><span className="local-indicator"><span className="status-dot" />Local workspace</span><div className="avatar avatar-small">A</div><span className="today-date"><span className="date-number">{new Date().getDate()}</span><span className="date-description">{new Date().toLocaleDateString('en-US', { weekday: 'short' })},<br />{new Date().toLocaleDateString('en-US', { month: 'long' })}</span></span></div></header>
       <main className="compact-page">
-        <AssistantPanel assistant={assistant} microphoneId={voice.microphoneId} setMicrophoneId={voice.setMicrophoneId} microphones={voice.microphones} refreshMicrophones={voice.refreshMicrophones} />
-        <VoicePanel voice={voiceControls} microphoneLocked={assistant.status !== 'off'} clipSeconds={isRecording && recordingKind.current === 'clip' ? Math.max(0, 30 - camera.elapsed) : null} />
+        {view === 'Overview' && <>
+          <AssistantPanel assistant={assistant} microphoneId={voice.microphoneId} setMicrophoneId={voice.setMicrophoneId} microphones={voice.microphones} refreshMicrophones={voice.refreshMicrophones} />
+          <VoicePanel assistantActive={assistant.status !== 'off'} clipSeconds={isRecording && recordingKind.current === 'clip' ? Math.max(0, 30 - camera.elapsed) : null} />
+        </>}
         {storageError && <div className="storage-error" role="alert"><CloudOff size={17} />{storageError}</div>}
         {view === 'Overview' && <>
-          <div className="capture-grid">{cameraPanel}<section className="panel quick-notes"><div className="panel-heading"><div className="panel-title"><span className="heading-icon"><FileText size={18} /></span><div><h2>Voice notes</h2><p>Speak a thought. Keep it here.</p></div></div><button className="icon-button icon-button-bordered" aria-label="Dictate a new note" onClick={dictateNote}><Mic size={17} /></button></div>{noteEditor}<button className="all-notes-link" onClick={() => navigate('Notes')}><span><FolderOpen size={14} />All notes <span className="small-count">{notes.length}</span></span><ArrowRight size={15} /></button></section></div>
+          <div className="capture-grid">{cameraPanel}<section className="panel quick-notes"><div className="panel-heading"><div className="panel-title"><span className="heading-icon"><FileText size={18} /></span><div><h2>Notes</h2><p>Thoughts worth keeping.</p></div></div></div>{noteEditor}<button className="all-notes-link" onClick={() => navigate('Notes')}><span><FolderOpen size={14} />All notes <span className="small-count">{notes.length}</span></span><ArrowRight size={15} /></button></section></div>
         </>}
         {view === 'Camera' && <><div className="full-camera">{cameraPanel}</div><div className="camera-info"><Wifi size={19} /><div><h3>Two cameras. Your point of view.</h3><p>Add the Wi-Fi address of each ESP32-CAM in settings, then choose a camera above. Recordings from the selected camera stay in this browser.</p></div><button className="button button-secondary" onClick={() => setModal('settings')}>Configure cameras <ArrowUpRight size={14} /></button></div></>}
-        {view === 'Notes' && <section className="panel notes-workspace"><div className="notes-list"><div className="notes-search"><Search size={15} /><input aria-label="Search notes" placeholder="Search your notes" value={noteSearch} onChange={e => setNoteSearch(e.target.value)} /></div><div className="notes-list-items">{notes.filter(note => `${note.title} ${note.body}`.toLowerCase().includes(noteSearch.toLowerCase())).map(note => <button key={note.id} className={`note-list-item ${selectedNote?.id === note.id ? 'selected' : ''}`} onClick={() => setSelectedNoteId(note.id)}><div><span className="tag">{note.tag}</span></div><h3>{note.title || 'Untitled note'}</h3><p>{note.body || 'Your next thought starts here…'}</p><span className="note-list-date">{dateLabel(note.updatedAt)} · {timeLabel(note.updatedAt)}</span></button>)}{!notes.some(note => `${note.title} ${note.body}`.toLowerCase().includes(noteSearch.toLowerCase())) && <p className="list-empty">No notes found. Try another search.</p>}</div><button className="new-note-list" onClick={dictateNote}><Mic size={16} /> Dictate a note</button><button className="new-note-list typed-note-link" onClick={addNote}><Plus size={13} /> Write instead</button></div><div className="full-note-editor"><div className="full-note-toolbar"><span><FileText size={15} /> Your notebook</span>{selectedNote && <button className="icon-button" aria-label="Delete selected note" disabled={voice.mode === 'dictating' && selectedNote?.id === voiceNoteId.current} onClick={() => { setNotes(previous => previous.filter(note => note.id !== selectedNote.id)); notify('Note deleted.') }}><Trash2 size={16} /></button>}</div>{noteEditor}</div></section>}
-        {(view === 'Overview' || view === 'Memories') && <section className="memories-section"><div className="section-heading"><div><h2>{view === 'Overview' ? 'Worth remembering' : 'Your memory collection'}<span className="small-count">{memories.length}</span></h2><p>{view === 'Overview' ? 'Small moments. A bigger picture.' : 'Find your way back to a moment.'}</p></div>{view === 'Overview' && <button className="text-button" onClick={() => navigate('Memories')}>View all memories <ArrowRight size={15} /></button>}{view === 'Memories' && <span className="collection-storage"><HardDrive size={14} />{formatBytes(memories.reduce((sum, memory) => sum + (memory.size ?? 0), 0))} stored locally</span>}</div>{memories.length ? <div className="memory-grid">{(view === 'Overview' ? memories.slice(0, 3) : memories).map(memory => <MemoryCard key={memory.id} memory={memory} sessionBlob={sessionRecordings.current.get(memory.id)} onOpen={() => setSelectedMemory(memory)} />)}</div> : <div className="empty-state memory-empty"><Bookmark size={30} /><h3>Your next memory starts with your voice.</h3><p>Say “clip a memory” to save the next 30 seconds, or “record this message” for a longer recording.</p><button className="button button-secondary" onClick={() => requestCapture('clip')}><Mic size={14} />Clip a memory</button></div>}</section>}
+        {view === 'Notes' && <section className="panel notes-workspace"><div className="notes-list"><div className="notes-search"><Search size={15} /><input aria-label="Search notes" placeholder="Search your notes" value={noteSearch} onChange={e => setNoteSearch(e.target.value)} /></div><div className="notes-list-items">{notes.filter(note => `${note.title} ${note.body}`.toLowerCase().includes(noteSearch.toLowerCase())).map(note => <button key={note.id} className={`note-list-item ${selectedNote?.id === note.id ? 'selected' : ''}`} onClick={() => setSelectedNoteId(note.id)}><div><span className="tag">{note.tag}</span></div><h3>{note.title || 'Untitled note'}</h3><p>{note.body || 'Your next thought starts here…'}</p><span className="note-list-date">{dateLabel(note.updatedAt)} · {timeLabel(note.updatedAt)}</span></button>)}{!notes.some(note => `${note.title} ${note.body}`.toLowerCase().includes(noteSearch.toLowerCase())) && <p className="list-empty">No notes found. Try another search.</p>}</div><button className="new-note-list typed-note-link" onClick={addNote}><Plus size={13} /> Write a note</button></div><div className="full-note-editor"><div className="full-note-toolbar"><span><FileText size={15} /> Your notebook</span>{selectedNote && <button className="icon-button" aria-label="Delete selected note" disabled={voice.mode === 'dictating' && selectedNote?.id === voiceNoteId.current} onClick={() => { setNotes(previous => previous.filter(note => note.id !== selectedNote.id)); notify('Note deleted.') }}><Trash2 size={16} /></button>}</div>{noteEditor}</div></section>}
+        {(view === 'Overview' || view === 'Memories') && <section className="memories-section"><div className="section-heading"><div><h2>{view === 'Overview' ? 'Worth remembering' : 'Your memory collection'}<span className="small-count">{memories.length}</span></h2><p>{view === 'Overview' ? 'Small moments. A bigger picture.' : 'Find your way back to a moment.'}</p></div>{view === 'Overview' && <button className="text-button" onClick={() => navigate('Memories')}>View all memories <ArrowRight size={15} /></button>}{view === 'Memories' && <span className="collection-storage"><HardDrive size={14} />{formatBytes(memories.reduce((sum, memory) => sum + (memory.size ?? 0), 0))} stored locally</span>}</div>{memories.length ? <div className="memory-grid">{(view === 'Overview' ? memories.slice(0, 3) : memories).map(memory => <MemoryCard key={memory.id} memory={memory} sessionBlob={sessionRecordings.current.get(memory.id)} onOpen={() => setSelectedMemory(memory)} />)}</div> : <div className="empty-state memory-empty"><Bookmark size={30} /><h3>Your next memory starts with your voice.</h3><p>Say “clip a memory” to save the previous 30 seconds, or “start recording” for a longer recording.</p></div>}</section>}
         <footer className="page-footer"><span><Glasses size={16} />A little more present. A little more clarity.</span><span><HardDrive size={12} />Saved on your device<span className="footer-dot">·</span>Built for the moments in between</span></footer>
       </main>
     </div>
     <nav className="mobile-bottom-nav" aria-label="Mobile navigation">{navItems.map(item => <button key={item.name} aria-current={view === item.name ? 'page' : undefined} className={view === item.name ? 'active' : ''} onClick={() => navigate(item.name)}><item.icon size={21} strokeWidth={1.7} /><span>{item.name}</span></button>)}</nav>
     {toast && <div className="toast" role="status"><span className="toast-icon"><Check size={15} /></span>{toast}<button className="icon-button" aria-label="Dismiss notification" onClick={() => setToast('')}><X size={14} /></button></div>}
     {modal === 'settings' && <Modal title="Your camera setup" subtitle="Two perspectives. One place to remember them." onClose={() => setModal(null)}><form className="modal-form" onSubmit={saveSettings}><div className="settings-intro"><Wifi size={21} /><p>Connect your computer and both ESP32-CAM modules to the same Wi-Fi network. Enter each camera’s local address below.</p></div><label><span><Camera size={14} />Camera 01 · ESP32-CAM</span><input name="camera1" type="url" placeholder="http://192.168.1.100" defaultValue={settings.camera1} disabled={isBusy} /><small>The camera’s root address, without /stream or /capture.</small></label><label><span><Camera size={14} />Camera 02 · ESP32-CAM</span><input name="camera2" type="url" placeholder="http://192.168.1.101" defaultValue={settings.camera2} disabled={isBusy} /></label><div className="settings-note"><Radio size={16} /><p>Made for Espressif’s standard CameraWebServer firmware. Wi-Fi sends the footage; the serial adapters are used for device setup. ESP32 recordings are video-only.</p></div><div className="settings-note"><HardDrive size={16} /><p>Notes and memories stay in this browser. Download recordings you want to keep outside this device.</p></div>{isBusy && <p className="form-warning">Finish recording or connecting before changing camera settings.</p>}<div className="form-footer"><button type="button" className="button button-secondary" onClick={() => setModal(null)}>Cancel</button><button type="submit" className="button button-primary" disabled={isBusy}><Check size={15} />Save settings</button></div></form></Modal>}
-    {modal === 'help' && <Modal title="A little help getting started" subtitle="Make room for what matters." onClose={() => setModal(null)}><div className="help-content"><div><span className="help-number">01</span><section><h3>Connect your perspective</h3><p>Configure your two ESP32-CAM addresses in Settings, choose Camera 01 or Camera 02, and connect. Use This device to try it with your phone or computer’s camera.</p></section></div><div><span className="help-number">02</span><section><h3>Keep a moment, hands-free</h3><p>Enable voice once. Say “record this message” to start and “stop recording” to save. Say “clip a memory” to capture the next 30 seconds automatically. Clips capture forward; they do not recover footage from before the command.</p></section></div><div><span className="help-number">03</span><section><h3>Speak your notes</h3><p>Say “make a new note”, followed by what you want to remember. Finalized speech saves as you go. Say “save note” to finish or “cancel note” to discard. Say “stop listening” to pause the microphone. While taking a note, other command phrases are treated as note content.</p></section></div><div className="help-local"><HardDrive size={17} /><p>Voice uses your browser’s default microphone and may send speech to its recognition service. Keep this page open. Clearing browser data removes saved notes and recordings. ESP32 connections need the local dashboard server running on the same network.</p></div></div></Modal>}
+    {modal === 'help' && <Modal title="A little help getting started" subtitle="Make room for what matters." onClose={() => setModal(null)}><div className="help-content"><div><span className="help-number">01</span><section><h3>Connect your perspective</h3><p>Configure your two ESP32-CAM addresses in Settings, choose Camera 01 or Camera 02, and connect. Use This device to try it with your phone or computer’s camera.</p></section></div><div><span className="help-number">02</span><section><h3>Keep a moment, hands-free</h3><p>In Ask your glasses, say “start recording” and “stop recording” to save a video. Say “clip a memory” to save the previous 30 seconds; connect the camera and wait for its buffer to fill first.</p></section></div><div><span className="help-number">03</span><section><h3>Speak your notes</h3><p>In Ask your glasses, say “make a new note” for a reminder or “take lecture notes” during a class, then speak naturally. Say “save note” to get a titled, organized summary, or “cancel note” to discard it. Your draft is saved as you speak.</p></section></div><div className="help-local"><HardDrive size={17} /><p>Voice uses your browser’s default microphone and may send speech to its recognition service. Keep this page open. Clearing browser data removes saved notes and recordings. ESP32 connections need the local dashboard server running on the same network.</p></div></div></Modal>}
     {selectedMemory && <Modal title={selectedMemory.title} subtitle={`${dateLabel(selectedMemory.createdAt)} at ${timeLabel(selectedMemory.createdAt)} · ${selectedMemory.category}`} onClose={() => setSelectedMemory(null)} wide><div className="memory-detail">{selectedMemory.kind === 'recording' ? <div className="recording-player">{recordingLoading ? <div className="player-message"><LoaderCircle className="spin" />Loading your moment…</div> : recordingError ? <div className="player-message"><Video size={28} /><p>{recordingError}</p></div> : recordingUrl && <video key={recordingUrl} controls playsInline src={recordingUrl} />}</div> : selectedMemory.image ? <img className="detail-image" src={selectedMemory.image} alt={selectedMemory.title} /> : <div className="detail-illustration"><Bookmark size={48} strokeWidth={1.2} /><span>A little moment. A lasting memory.</span></div>}<p className="detail-description">{selectedMemory.description || 'Sometimes a moment speaks for itself.'}</p>{selectedMemory.kind === 'recording' && <div className="recording-details"><span><Clock3 size={14} />{formatDuration(selectedMemory.duration ?? 0)}</span><span><HardDrive size={14} />{formatBytes(selectedMemory.size ?? 0)}</span></div>}<div className="detail-actions">{confirmDelete ? <div className="delete-confirm"><span>Delete this memory?</span><button className="button button-danger" disabled={deleting} onClick={() => void removeMemory()}>{deleting ? 'Deleting…' : 'Delete'}</button><button className="button button-secondary" onClick={() => setConfirmDelete(false)}>Keep it</button></div> : <button className="text-button delete-button" onClick={() => setConfirmDelete(true)}><Trash2 size={15} />Delete memory</button>}{recordingUrl && <a className="button button-primary" href={recordingUrl} download={`clarity-${selectedMemory.id}.${selectedMemory.mimeType?.includes('mp4') ? 'mp4' : 'webm'}`}><ArrowDownToLine size={15} />Download recording</a>}</div></div></Modal>}
   </div>
 }

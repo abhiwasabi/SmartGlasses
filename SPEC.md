@@ -18,17 +18,16 @@ The glasses provide visual and audio input, and the assistant responds through t
 ### 2. Record videos and clip moments
 
 - The user can start and stop video recording with spoken commands such as “Start recording” and “Stop recording.”
-- The user can request a short clip with a command such as “Clip this” or “Clip a memory.”
+- While a camera is connected, the app maintains a rolling video buffer. The user can request a clip of the 30 seconds before the command with “Clip this” or “Clip a memory.” The buffer needs 30 seconds to fill after connecting and is paused during a longer recording.
 - Completed recordings and clips are saved to the app's library for later playback and download.
 - The app makes recording state and successful saves clear. A failed capture or save must not be reported as successful.
-- Clip timing must match the implemented capture behavior. The current app records the next 30 seconds after a clip command; capturing moments before the command would require a recording buffer.
 
 ### 3. Take notes by voice
 
-- The user starts a note with a command such as “Make a new note,” then dictates its contents.
-- Spoken words are transcribed into a text note. Commands such as “Save note” and “Cancel note” finish or discard the note.
+- The user starts a note with a command such as “Make a new note” or “Take lecture notes,” then speaks naturally.
+- When the user says “Save note,” Gemini turns the captured speech into a ready-to-read summary and gives it a short, descriptive title. A brief reminder should stay brief and preserve specific details such as quantities and dates; a lecture or longer explanation should use useful headings and bullets, while connected personal notes can use short paragraphs.
+- “Cancel note” discards the current note. Command phrases used to control note-taking should not become part of the note content.
 - Saved notes remain available in the app for later reading and editing.
-- Command phrases used to control note-taking should not become part of the saved note text.
 
 ### 4. Review saved content
 
@@ -50,7 +49,7 @@ This document describes the product's purpose and intended experience; it does n
 
 - The companion dashboard uses React and TypeScript and supports configured ESP32-CAM devices or the phone/computer camera as a development input.
 - The visual assistant currently uses Gemini Live to receive microphone audio and selected camera frames and return spoken answers.
-- Visual conversations and recording/note voice controls currently run in separate, mutually exclusive modes. A unified voice experience is the intended direction; live assistant conversations do not yet execute capture or note commands.
+- Visual conversations and browser voice controls run in separate, mutually exclusive modes. During a Gemini Live session, Gemini function calls can trigger recording, clipping, and organized note summaries; the browser voice controls remain as a fallback.
 - Saved content currently lives in the user's browser: notes and settings in localStorage, and video files in IndexedDB. Cross-device synchronization is not implemented, and clearing browser site data removes saved content.
 - Actual glasses microphone and speaker integration depends on the hardware connection and supported audio routing. Browser camera, microphone, and speaker support alone does not establish a complete glasses hardware integration.
 
@@ -61,7 +60,7 @@ The complete product should let a user wearing the glasses:
 1. Ask “What's in front of me?” and hear an answer grounded in the current camera view.
 2. Start and stop a recording by voice and find the saved video in the app.
 3. Request a short clip by voice and review the saved clip later.
-4. Dictate and save a note by voice and read or edit it in the app.
+4. Dictate a reminder or lecture by voice, save its organized summary, and read or edit it in the app.
 5. Receive understandable feedback when camera context, audio input, connectivity, or storage is unavailable.
 
 Future changes should support this central goal: helping users understand what they see and save what matters through a voice-powered pair of glasses.
