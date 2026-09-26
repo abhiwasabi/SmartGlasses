@@ -33,7 +33,7 @@ async function errorMessage(response: Response): Promise<string> {
   return `Assistant request failed (${response.status}).`
 }
 
-export function AssistantGoal({ connected, getVideo }: { connected: boolean; getVideo: () => HTMLVideoElement | null }) {
+export function AssistantGoal({ connected, assistantActive, getVideo }: { connected: boolean; assistantActive: boolean; getVideo: () => HTMLVideoElement | null }) {
   const [context, setContext] = useState('walking')
   const [goal, setGoal] = useState('')
   const [status, setStatus] = useState('Checking local assistant…')
@@ -77,6 +77,13 @@ export function AssistantGoal({ connected, getVideo }: { connected: boolean; get
     }
   }, [connected])
 
+  useEffect(() => {
+    if (assistantActive && activeRef.current) {
+      stopScanning()
+      setScanStatus('Gemini Live started. Scene scanning stopped.')
+    }
+  }, [assistantActive])
+
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     stopScanning()
@@ -99,7 +106,7 @@ export function AssistantGoal({ connected, getVideo }: { connected: boolean; get
   }
 
   async function scanFrame() {
-    if (busyRef.current) return
+    if (busyRef.current || assistantActive) return
     busyRef.current = true
     setScanBusy(true)
     const controller = new AbortController()
@@ -137,7 +144,7 @@ export function AssistantGoal({ connected, getVideo }: { connected: boolean; get
   }
 
   function startScanning() {
-    if (!connected || !saved || activeRef.current) return
+    if (!connected || !saved || assistantActive || activeRef.current) return
     activeRef.current = true
     setScanning(true)
     void scanFrame()
@@ -152,10 +159,10 @@ export function AssistantGoal({ connected, getVideo }: { connected: boolean; get
     </form>
     <p className="assistant-goal-status" role="status">{status}</p>
     <div className="assistant-scan-controls">
-      <button className="button button-secondary" type="button" onClick={() => void scanFrame()} disabled={!connected || !saved || scanBusy}>Scan once</button>
-      <button className="button button-primary" type="button" onClick={scanning ? stopScanning : startScanning} disabled={!scanning && (!connected || !saved || scanBusy)}>{scanning ? 'Stop scanning' : 'Start scanning'}</button>
+      <button className="button button-secondary" type="button" onClick={() => void scanFrame()} disabled={!connected || !saved || assistantActive || scanBusy}>Scan once</button>
+      <button className="button button-primary" type="button" onClick={scanning ? stopScanning : startScanning} disabled={!scanning && (!connected || !saved || assistantActive || scanBusy)}>{scanning ? 'Stop scanning' : 'Start scanning'}</button>
       <span>With scanning on, a resized camera frame is sent to Gemini every five seconds after the previous scan finishes.</span>
     </div>
-    <p className="assistant-goal-status" role="status">{scanStatus}</p>
+    <p className="assistant-goal-status" role="status">{assistantActive ? 'End the Gemini Live conversation to use scene scanning.' : scanStatus}</p>
   </section>
 }
