@@ -3,6 +3,7 @@
 import time
 
 from decision_engine import event_urgency, handle_event
+from gemini_scene import analyze_frame
 
 
 URGENCY_LEVEL = {"ignore": 0, "normal": 1, "medium": 2, "high": 3, "critical": 4}
@@ -94,3 +95,24 @@ class LiveAssistant:
         message = handle_event(current_context, event, goal=current_goal or None)
         self.memory.record(current_context, current_goal, event, urgency, bool(message))
         return {"status": "spoken" if message else "quiet", "message": message}
+
+    def process_frame(self, image):
+        """Analyze a camera still and speak at most one grounded, nonrepeated alert."""
+        assessment = analyze_frame(image, self.context, self.goal)
+        if not assessment.should_alert:
+            return {"status": "quiet", "message": None}
+
+        event = {
+            "source": "gemini_frame",
+            "type": assessment.label.lower(),
+            "direction": assessment.direction,
+            "track_id": f"{assessment.label.lower()}:{assessment.direction}",
+        }
+        if not self.memory.should_process(self.context, self.goal, event, "normal"):
+            return {"status": "suppressed", "message": None}
+
+        from elevenlabs_voice import speak
+
+        speak(assessment.message)
+        self.memory.record(self.context, self.goal, event, "normal", True)
+        return {"status": "spoken", "message": assessment.message}

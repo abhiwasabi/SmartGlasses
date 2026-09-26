@@ -2,6 +2,7 @@
 
 POST /api/session with {"context": "walking", "goal": "find a trash bin"}.
 POST /api/events with {"event": {"type": "bin_visible", ...}}.
+POST /api/frame with a JPEG body to ask Gemini about the current goal.
 The server binds to loopback so API keys and spoken goals stay on this machine.
 """
 
@@ -11,9 +12,11 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlsplit
 
 from live_assistant import LiveAssistant
+from gemini_scene import SceneUnavailable
 
 
 MAX_BODY_BYTES = 16_384
+MAX_FRAME_BYTES = 524_288
 ALLOWED_ORIGINS = {
     f"http://{host}:{port}"
     for host in ("localhost", "127.0.0.1")
@@ -63,6 +66,20 @@ def create_server(port=8765, assistant=None):
             origin = self.headers.get("Origin")
             return origin is None or origin in ALLOWED_ORIGINS
 
+        def _read_frame(self):
+            if self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "image/jpeg":
+                raise ValueError("frame must use image/jpeg")
+            try:
+                size = int(self.headers.get("Content-Length", "0"))
+            except ValueError as exc:
+                raise ValueError("Content-Length must be a number") from exc
+            if size < 4 or size > MAX_FRAME_BYTES:
+                raise ValueError("JPEG frame must be between 4 and 524288 bytes")
+            frame = self.rfile.read(size)
+            if not (frame.startswith(b"\xff\xd8") and frame.endswith(b"\xff\xd9")):
+                raise ValueError("frame must be a JPEG image")
+            return frame
+
         def do_OPTIONS(self):
             if not self._allowed_origin():
                 self._send(403, {"error": "origin not allowed"})
@@ -78,8 +95,12 @@ def create_server(port=8765, assistant=None):
             self.end_headers()
 
         def do_GET(self):
-            if urlsplit(self.path).path == "/health":
+            if not self._allowed_origin():
+                self._send(403, {"error": "origin not allowed"})
+            elif urlsplit(self.path).path == "/health":
                 self._send(200, {"status": "ready"})
+            elif urlsplit(self.path).path == "/api/session":
+                self._send(200, {"context": assistant.context, "goal": assistant.goal})
             else:
                 self._send(404, {"error": "unknown path"})
 
@@ -88,10 +109,14 @@ def create_server(port=8765, assistant=None):
                 self._send(403, {"error": "origin not allowed"})
                 return
             path = urlsplit(self.path).path
-            if path not in ("/api/session", "/api/events"):
+            if path not in ("/api/session", "/api/events", "/api/frame"):
                 self._send(404, {"error": "unknown path"})
                 return
             try:
+                if path == "/api/frame":
+                    result = assistant.process_frame(self._read_frame())
+                    self._send(200, result)
+                    return
                 payload = self._read_body()
                 if path == "/api/session":
                     if not any(key in payload for key in ("context", "goal")):
@@ -111,6 +136,9 @@ def create_server(port=8765, assistant=None):
                     result = assistant.process_event(event, context=context, goal=goal)
             except ValueError as exc:
                 self._send(400, {"error": str(exc)})
+                return
+            except SceneUnavailable as exc:
+                self._send(503, {"error": str(exc)})
                 return
             except Exception:
                 self.log_error("event processing failed")

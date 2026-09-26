@@ -151,12 +151,26 @@ receives the context, goal, and event fields you pass to `handle_event`.
 ## Live event receiver
 
 The Overview dashboard has a **What are you trying to do?** form. Start the
-receiver on the same computer as the dashboard, then choose an activity, enter
-any goal, and click **Set goal**. The form sends `POST /api/session` to the
-loopback receiver and shows whether the update succeeded. Clearing the goal
-keeps safety alerts active. The form currently works from a browser on that
-computer; on a phone, `127.0.0.1` points to the phone instead. A trusted
-backend proxy is needed for a phone or deployed dashboard.
+receiver on the same computer as the dashboard, then enter any activity and
+goal and click **Set goal**. The form saves both to `POST /api/session` and
+restores them from `GET /api/session` on reload. Clearing the goal keeps the
+rule-based safety alerts active.
+
+Connect an ESP32 or device camera in the dashboard, then click **Scan once**
+or **Start scanning**. Each scan downsizes one current frame to at most 640px
+and sends its JPEG bytes to `POST /api/frame` on the local receiver. Gemini
+looks for something clearly visible that helps the saved goal, such as a trash
+bin when the goal is to discard a wrapper. Its short answer enters the same
+spoken-alert cooldown as detector events. Continuous scanning waits five
+seconds after each request finishes before starting another; it stops when
+the camera disconnects or the goal changes. Camera frames leave this computer
+for Gemini only after you press a scan control. A single image cannot establish
+metric distance or closing speed, so scene alerts make neither claim. The
+existing `/api/events` path remains available for detector measurements.
+
+The dashboard form and scan controls currently work from a browser on the
+same computer as the receiver; on a phone, `127.0.0.1` points to the phone
+instead. A trusted backend proxy is needed for a phone or deployed dashboard.
 
 Run `python event_receiver.py` in the Shellhacks folder. It listens only on
 `http://127.0.0.1:8765`, so API keys stay in the local `.env`. The receiver
@@ -189,10 +203,9 @@ a substantial decrease in distance can trigger another alert sooner. Events
 that produced no speech can be reconsidered after one second. Changing the goal
 lets the same object be reconsidered immediately.
 
-The dashboard captures images and recordings but does not yet emit
-object detections. A detector must send observations to `/api/events`; camera
-video alone cannot provide object type, distance, or motion. The receiver is a
-single-user local prototype and processes one request at a time. A phone or
-deployed dashboard needs a trusted same-origin backend connection before it can
-use this receiver remotely. Run all offline checks with
-`python -m unittest -v test_gemini_integration.py test_live_integration.py test_voice_fallback.py`.
+The dashboard can now ask Gemini to interpret individual camera frames. It
+does not calculate distance or relative motion from those frames. A detector
+can send those measurements to `/api/events` for time-to-contact alerts. The
+receiver is a single-user local prototype and processes one request at a
+time. Run all offline checks with
+`python -m unittest -v test_gemini_integration.py test_live_integration.py test_scene_integration.py test_voice_fallback.py`.
