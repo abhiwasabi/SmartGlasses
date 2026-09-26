@@ -1,0 +1,181 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { Session, LiveServerMessage } from '@google/genai'
+import { encodePcm, decodePcm } from '../lib/liveAudio'
+
+type Status = 'off' | 'connecting' | 'listening' | 'speaking'
+type Caption = { role: 'You' | 'Assistant'; text: string }
+export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: string, beforeStart: () => void) {
+  const [status, setStatus] = useState<Status>('off')
+  const [error, setError] = useState('')
+  const [captions, setCaptions] = useState<Caption[]>([])
+  const [vision, setVision] = useState(false)
+  const generation = useRef(0)
+  const cleanup = useRef<(() => void) | null>(null)
+  const camera = useRef(cameraStream)
+  camera.current = cameraStream
+  const starting = useRef(false)
+
+  const stop = useCallback(() => {
+    generation.current++
+    starting.current = false
+    cleanup.current?.()
+    cleanup.current = null
+    setStatus('off'); setVision(false)
+  }, [])
+
+  const start = useCallback(async (accessCode: string) => {
+    if (starting.current) return
+    stop()
+    beforeStart()
+    const run = ++generation.current
+    starting.current = true
+    setError(''); setCaptions([]); setStatus('connecting')
+    let session: Session | undefined
+    let mic: MediaStream | undefined
+    let capture: AudioWorkletNode | undefined
+    let source: MediaStreamAudioSourceNode | undefined
+    let frameTimer: number | undefined
+    let durationTimer: number | undefined
+    let video: HTMLVideoElement | undefined
+    let context: AudioContext
+    try { context = new AudioContext() }
+    catch { stop(); setError('Live audio is unavailable in this browser. Use current Safari or Chrome.'); return }
+    const tokenRequest = new AbortController()
+    const speakers = new Set<AudioBufferSourceNode>()
+    let nextAudioTime = 0
+    let releaseDone = false
+    const clearSpeaker = () => {
+      for (const node of speakers) { node.onended = null; try { node.stop() } catch { /* Already ended. */ } node.disconnect() }
+      speakers.clear(); nextAudioTime = 0
+    }
+    const release = () => {
+      if (releaseDone) return
+      releaseDone = true
+      tokenRequest.abort()
+      window.clearInterval(frameTimer); window.clearTimeout(durationTimer)
+      capture?.disconnect(); source?.disconnect()
+      if (capture) capture.port.onmessage = null
+      mic?.getTracks().forEach(track => track.stop())
+      clearSpeaker()
+      if (video) { video.pause(); video.srcObject = null; video.remove() }
+      session?.close()
+      void context.close().catch(() => {})
+    }
+    cleanup.current = release
+    const current = () => run === generation.current && !releaseDone
+    const fail = (message: string) => { if (current()) { stop(); setError(message) } }
+    const addCaption = (role: Caption['role'], text: string) => {
+      setCaptions(previous => {
+        const last = previous.at(-1)
+        return last?.role === role
+          ? [...previous.slice(0, -1), { role, text: (last.text + text).slice(-4000) }]
+          : [...previous.slice(-11), { role, text }]
+      })
+    }
+    const onMessage = (message: LiveServerMessage) => {
+      if (!current()) return
+      if (message.goAway) { fail('This session is ending. Tap Start assistant to reconnect.'); return }
+      const content = message.serverContent
+      if (!content) return
+      if (content.interrupted) { clearSpeaker(); setStatus('listening') }
+      if (content.inputTranscription?.text) addCaption('You', content.inputTranscription.text)
+      if (content.outputTranscription?.text) addCaption('Assistant', content.outputTranscription.text)
+      for (const part of content.modelTurn?.parts ?? []) {
+        if (!part.inlineData?.data || !part.inlineData.mimeType?.startsWith('audio/pcm')) continue
+        try {
+          const samples = decodePcm(part.inlineData.data)
+          const buffer = context.createBuffer(1, samples.length, 24000)
+          buffer.copyToChannel(new Float32Array(samples), 0)
+          const node = context.createBufferSource()
+          node.buffer = buffer; node.connect(context.destination)
+          const time = Math.max(context.currentTime + 0.025, nextAudioTime)
+          nextAudioTime = time + buffer.duration
+          speakers.add(node); setStatus('speaking')
+          node.onended = () => { speakers.delete(node); node.disconnect(); if (current() && !speakers.size) setStatus('listening') }
+          node.start(time)
+        } catch { fail('The assistant audio could not play. End the session and try again.') }
+      }
+    }
+    durationTimer = window.setTimeout(() => fail('The assistant took too long to connect. Check your connection and start again.'), 30_000)
+    try {
+      if (!navigator.mediaDevices?.getUserMedia || !context.audioWorklet) throw new Error('Live audio needs a current browser on HTTPS or localhost.')
+      // Resume immediately within the user's tap for Safari's audio permission.
+      await context.resume()
+      const response = await fetch('/api/live/token', { method: 'POST', headers: { 'X-Live-Access-Code': accessCode }, signal: tokenRequest.signal })
+      const data = await response.json() as { error?: string; token?: string; model?: string }
+      if (!response.ok || !data.token || !data.model) throw new Error(data.error || 'The assistant could not start.')
+      if (!current()) return
+      mic = await navigator.mediaDevices.getUserMedia({ video: false, audio: {
+        echoCancellation: true, noiseSuppression: true, channelCount: 1,
+        ...(microphoneId ? { deviceId: { exact: microphoneId } } : {}),
+      } })
+      if (!current()) { mic.getTracks().forEach(track => track.stop()); return }
+      mic.getAudioTracks()[0]?.addEventListener('ended', () => fail('The microphone disconnected. Start again to reconnect.'), { once: true })
+      await context.audioWorklet.addModule('/live-audio-worklet.js')
+      if (!current()) return
+      const { GoogleGenAI, Modality } = await import('@google/genai')
+      if (!current()) return
+      const ai = new GoogleGenAI({ apiKey: data.token, httpOptions: { apiVersion: 'v1beta' } })
+      session = await ai.live.connect({ model: data.model, config: {
+        responseModalities: [Modality.AUDIO], inputAudioTranscription: {}, outputAudioTranscription: {},
+      }, callbacks: {
+        onmessage: onMessage,
+        onerror: () => fail('The Gemini connection failed. Check your internet connection and Live model access, then start again.'),
+        onclose: () => fail('The assistant disconnected. Tap Start assistant to reconnect.'),
+      } })
+      if (!current()) { session.close(); return }
+      video = document.createElement('video')
+      video.muted = true; video.playsInline = true; video.autoplay = true
+      video.className = 'assistant-frame-source'; video.setAttribute('aria-hidden', 'true')
+      document.body.append(video)
+      const canvas = document.createElement('canvas')
+      let hadVision: boolean | undefined
+      const sendFrame = () => {
+        if (!current() || !session || !video) return
+        const stream = camera.current
+        if (video.srcObject !== stream) {
+          video.srcObject = stream
+          if (stream) void video.play().catch(() => {})
+        }
+        const available = !!stream?.getVideoTracks().some(track => track.readyState === 'live') && video.readyState >= 2 && video.videoWidth > 0
+        setVision(available)
+        if (available !== hadVision) {
+          hadVision = available
+          session.sendClientContent({ turns: [{ role: 'user', parts: [{ text: available
+            ? 'Camera context is now available. Use the newly arriving frames for visual questions.'
+            : 'Camera context is currently unavailable. Do not describe the current scene using old frames; explain that the camera needs to be connected.' }] }], turnComplete: false })
+        }
+        if (!available) return
+        const ratio = Math.min(1, 640 / video.videoWidth)
+        canvas.width = Math.round(video.videoWidth * ratio); canvas.height = Math.round(video.videoHeight * ratio)
+        try {
+          canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height)
+          session.sendRealtimeInput({ video: { data: canvas.toDataURL('image/jpeg', 0.7).split(',')[1], mimeType: 'image/jpeg' } })
+        } catch { setVision(false) }
+      }
+      sendFrame()
+      frameTimer = window.setInterval(() => { try { sendFrame() } catch { fail('The camera context connection was interrupted. Start the assistant again.') } }, 1000)
+      source = context.createMediaStreamSource(mic)
+      capture = new AudioWorkletNode(context, 'live-audio-capture')
+      capture.port.onmessage = event => {
+        if (!current() || !session) return
+        try { session.sendRealtimeInput({ audio: { data: encodePcm(event.data as Float32Array), mimeType: `audio/pcm;rate=${context.sampleRate}` } }) }
+        catch { fail('The microphone stream was interrupted. Start the assistant again.') }
+      }
+      source.connect(capture); capture.connect(context.destination)
+      // Keep demos bounded; reconnect explicitly rather than silently using stale context.
+      window.clearTimeout(durationTimer)
+      durationTimer = window.setTimeout(() => fail('Session finished. Tap Start assistant for another conversation.'), 8 * 60_000)
+      setStatus('listening')
+    } catch (reason) {
+      fail(reason instanceof Error ? reason.message : 'The assistant could not start. Check microphone access and try again.')
+    }
+  }, [beforeStart, microphoneId, stop])
+
+  useEffect(() => {
+    const hidden = () => { if (document.hidden) stop() }
+    document.addEventListener('visibilitychange', hidden)
+    return () => { document.removeEventListener('visibilitychange', hidden); generation.current++; cleanup.current?.() }
+  }, [stop])
+  return { status, error, captions, vision, start, stop }
+}
