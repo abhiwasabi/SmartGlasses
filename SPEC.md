@@ -18,7 +18,7 @@ The glasses provide visual and audio input, and the assistant responds through t
 ### 2. Record videos and clip moments
 
 - The user can start and stop video recording with spoken commands such as “Start recording” and “Stop recording.”
-- While a camera is connected, the app maintains a rolling video buffer. The user can request a clip of the 30 seconds before the command with “Clip this” or “Clip a memory.” The buffer needs 30 seconds to fill after connecting and is paused during a longer recording.
+- While a camera is connected, the app maintains a rolling video buffer. The user can request a clip of the 15 seconds before the command with “Clip this” or “Clip a memory.” The buffer needs 15 seconds to fill after connecting and is paused during a longer recording.
 - Completed recordings and clips are saved to the app's library for later playback and download.
 - The app makes recording state and successful saves clear. A failed capture or save must not be reported as successful.
 

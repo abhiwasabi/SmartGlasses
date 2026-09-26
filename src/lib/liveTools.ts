@@ -3,7 +3,7 @@ import type { Schema, Tool } from '@google/genai'
 export const LIVE_TOOLS: Tool[] = [{ functionDeclarations: [
   { name: 'start_recording', description: 'Start a longer video recording when the user says “start recording”.' },
   { name: 'stop_recording', description: 'Stop and save the current video recording when the user explicitly asks to stop.' },
-  { name: 'clip_memory', description: 'Save the previous 30 seconds from the camera buffer when the user explicitly asks to clip or save a memory.' },
+  { name: 'clip_memory', description: 'Save the previous 15 seconds from the camera buffer when the user explicitly asks to clip or save a memory.' },
   { name: 'start_note', description: 'Start capturing a spoken note, lecture, or class when the user asks to make a note or take notes.' },
   { name: 'save_note', description: 'Summarize and save the current note when the user says save note or finish note. Return a concise title and useful organized plain-text content, preserving names, numbers, and important details.' , parameters: {
     type: 'OBJECT' as Schema['type'],
