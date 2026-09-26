@@ -160,3 +160,32 @@ Troubleshooting: a setup error means the server env is missing or Vite needs a
 restart; an access-code error means the demo code differs from the server setting;
 a Gemini session error can mean unavailable model access, quota, or connectivity.
 Never expose the permanent key in error reports.
+
+### ElevenLabs reply voice
+
+To use ElevenLabs for the assistant's spoken replies, add both settings privately
+to `.env.local`, then restart Vite:
+
+```dotenv
+ELEVENLABS_API_KEY=your_private_elevenlabs_key
+ELEVENLABS_VOICE_ID=your_selected_voice_id
+```
+
+Choose a voice available to your ElevenLabs account and copy its voice ID. Keep
+the existing Gemini settings and use the same demo access code in the dashboard.
+Neither permanent API key is sent to the browser. `/api/live/speech` runs on the
+server during development and preview, requires the demo code, and sends reply
+text to ElevenLabs using `eleven_flash_v2_5`.
+
+Gemini continues receiving camera frames and microphone audio. The app collects
+its output transcript and requests ElevenLabs speech after the reply completes;
+this adds latency compared with native Gemini playback. Gemini's generated audio
+is suppressed in this mode, but still counts toward Gemini usage. ElevenLabs
+usage is additional. Interrupting or ending a conversation cancels pending speech
+and stops playback; interruption depends on Gemini's recognition events. Failed
+speech requests show an error while the answer remains visible in captions.
+
+Leave both ElevenLabs settings empty to use Gemini's voice. Setting only one
+shows a setup error. Physical speaker playback and live ElevenLabs generation
+require account credentials and manual testing. A production backend must also
+implement `/api/live/speech`; static hosting cannot provide this route.

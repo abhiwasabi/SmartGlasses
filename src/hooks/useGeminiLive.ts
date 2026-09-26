@@ -43,8 +43,17 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
     const tokenRequest = new AbortController()
     const speakers = new Set<AudioBufferSourceNode>()
     let nextAudioTime = 0
+    let elevenLabs = false
+    let replyText = ''
+    let speechGeneration = 0
+    let speechQueue = Promise.resolve()
+    const speechRequests = new Set<AbortController>()
     let releaseDone = false
     const clearSpeaker = () => {
+      speechGeneration++
+      for (const request of speechRequests) request.abort()
+      speechRequests.clear()
+      replyText = ''
       for (const node of speakers) { node.onended = null; try { node.stop() } catch { /* Already ended. */ } node.disconnect() }
       speakers.clear(); nextAudioTime = 0
     }
@@ -72,14 +81,69 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
           : [...previous.slice(-11), { role, text }]
       })
     }
+    const speakReply = (text: string) => {
+      const speechRun = speechGeneration
+      speechQueue = speechQueue.then(async () => {
+        if (!current() || speechRun !== speechGeneration) return
+        const request = new AbortController()
+        speechRequests.add(request)
+        try {
+          const response = await fetch('/api/live/speech', {
+            method: 'POST', signal: request.signal,
+            headers: { 'Content-Type': 'application/json', 'X-Live-Access-Code': accessCode },
+            body: JSON.stringify({ text }),
+          })
+          if (!response.ok) {
+            const data = await response.json() as { error?: string }
+            throw new Error(data.error || 'ElevenLabs speech failed.')
+          }
+          const audio = await context.decodeAudioData(await response.arrayBuffer())
+          if (!current() || speechRun !== speechGeneration) return
+          const node = context.createBufferSource()
+          node.buffer = audio; node.connect(context.destination)
+          speakers.add(node); setStatus('speaking')
+          node.onended = () => {
+            speakers.delete(node); node.disconnect()
+            if (current() && !speakers.size) setStatus('listening')
+          }
+          node.start()
+          await new Promise<void>(resolve => { node.addEventListener('ended', () => resolve(), { once: true }) })
+        } catch (reason) {
+          if (!current() || request.signal.aborted || speechRun !== speechGeneration) return
+          setError(reason instanceof Error ? reason.message : 'ElevenLabs speech failed.')
+          setStatus('listening')
+        } finally {
+          speechRequests.delete(request)
+        }
+      })
+    }
     const onMessage = (message: LiveServerMessage) => {
       if (!current()) return
       if (message.goAway) { fail('This session is ending. Tap Start assistant to reconnect.'); return }
       const content = message.serverContent
       if (!content) return
       if (content.interrupted) { clearSpeaker(); setStatus('listening') }
-      if (content.inputTranscription?.text) addCaption('You', content.inputTranscription.text)
-      if (content.outputTranscription?.text) addCaption('Assistant', content.outputTranscription.text)
+      if (content.inputTranscription?.text) {
+        if (elevenLabs && (speechRequests.size || speakers.size)) { clearSpeaker(); setStatus('listening') }
+        addCaption('You', content.inputTranscription.text)
+      }
+      if (content.outputTranscription?.text) {
+        addCaption('Assistant', content.outputTranscription.text)
+        if (elevenLabs && !content.interrupted) {
+          replyText = (replyText + content.outputTranscription.text).slice(0, 4000)
+          const firstSentence = replyText.match(/(.+?[.!?])(?:\s|$)/s)
+          if (firstSentence) {
+            speakReply(firstSentence[1].trim())
+            replyText = replyText.slice(firstSentence[0].length).trimStart()
+          }
+        }
+      }
+      if (elevenLabs) {
+        if (content.turnComplete && replyText.trim()) {
+          speakReply(replyText.trim()); replyText = ''
+        }
+        return
+      }
       for (const part of content.modelTurn?.parts ?? []) {
         if (!part.inlineData?.data || !part.inlineData.mimeType?.startsWith('audio/pcm')) continue
         try {
@@ -102,8 +166,9 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
       // Resume immediately within the user's tap for Safari's audio permission.
       await context.resume()
       const response = await fetch('/api/live/token', { method: 'POST', headers: { 'X-Live-Access-Code': accessCode }, signal: tokenRequest.signal })
-      const data = await response.json() as { error?: string; token?: string; model?: string }
+      const data = await response.json() as { error?: string; token?: string; model?: string; voiceProvider?: string }
       if (!response.ok || !data.token || !data.model) throw new Error(data.error || 'The assistant could not start.')
+      elevenLabs = data.voiceProvider === 'elevenlabs'
       if (!current()) return
       mic = await navigator.mediaDevices.getUserMedia({ video: false, audio: {
         echoCancellation: true, noiseSuppression: true, channelCount: 1,
