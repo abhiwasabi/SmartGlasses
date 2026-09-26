@@ -112,3 +112,80 @@ public/
   favicon.svg        App icon
 vite.config.ts       Vite configuration and local camera proxy
 ```
+
+
+## Gemini Live visual assistant
+
+The dashboard can stream microphone audio and the selected camera to Gemini Live,
+then play spoken replies and show input/output captions. The server mints a
+single-session ephemeral token; the permanent Gemini key never reaches React.
+The token route runs with both `npm run dev` and `npm run preview`; a static-only
+hosting service cannot run this endpoint.
+
+1. Copy `.env.example` to `.env.local`.
+2. Have the key owner enter `GEMINI_API_KEY` privately in that file. Never put it
+   in a `VITE_` variable, commit it, or paste it into chat.
+3. Set `GEMINI_LIVE_ACCESS_CODE` to a private demo code. This protects token
+   creation even when using a public ngrok URL.
+4. Set `GEMINI_LIVE_MODEL` to a Live model available to that Gemini project
+   (the example uses `gemini-3.8-live`). A regular text-only model cannot be used.
+5. Restart Vite: `npm run dev -- --port 5174 --strictPort`.
+6. Connect an ESP32 or this device's camera. In **Ask your glasses**, enter the
+   demo code, choose a microphone, and tap **Start assistant**. Allow microphone
+   access. Ask “What am I looking at?”
+
+For iPhone, open the HTTPS ngrok URL in Safari and keep the page in the foreground.
+Start assistant is a user gesture that enables Safari audio playback. Ending the
+conversation or hiding the page releases the assistant microphone and socket.
+Camera capture remains under the existing camera controls. Audio-only conversation
+works without a camera; the UI identifies when camera context is unavailable.
+Sessions stop after eight minutes or when Gemini closes them; tap Start assistant
+to begin a fresh session. Automatic session resumption is not implemented.
+
+The assistant and browser voice commands are mutually exclusive: starting either
+stops the other. Live conversations do not execute recording or note commands;
+use the existing voice controls for those. Captions stay in memory and are cleared
+on the next session. Gemini receives audio and JPEG camera frames during sessions.
+Frames are sent at most once a second and scaled to a maximum width of 640 pixels.
+The existing ESP32 preview still polls separately through the camera proxy; this
+change does not lower its ngrok traffic.
+
+Audio uses an AudioWorklet and signed 16-bit PCM at the actual microphone context
+sample rate, which Gemini resamples; replies are played as 24 kHz PCM. Use headphones
+if the speaker causes echo. Model access, billing, quotas, and region availability
+are determined by the key owner's Gemini project. A configured key and an actual
+phone are required to verify a complete live conversation.
+
+Troubleshooting: a setup error means the server env is missing or Vite needs a
+restart; an access-code error means the demo code differs from the server setting;
+a Gemini session error can mean unavailable model access, quota, or connectivity.
+Never expose the permanent key in error reports.
+
+### ElevenLabs reply voice
+
+To use ElevenLabs for the assistant's spoken replies, add both settings privately
+to `.env.local`, then restart Vite:
+
+```dotenv
+ELEVENLABS_API_KEY=your_private_elevenlabs_key
+ELEVENLABS_VOICE_ID=your_selected_voice_id
+```
+
+Choose a voice available to your ElevenLabs account and copy its voice ID. Keep
+the existing Gemini settings and use the same demo access code in the dashboard.
+Neither permanent API key is sent to the browser. `/api/live/speech` runs on the
+server during development and preview, requires the demo code, and sends reply
+text to ElevenLabs using `eleven_flash_v2_5`.
+
+Gemini continues receiving camera frames and microphone audio. The app collects
+its output transcript and requests ElevenLabs speech after the reply completes;
+this adds latency compared with native Gemini playback. Gemini's generated audio
+is suppressed in this mode, but still counts toward Gemini usage. ElevenLabs
+usage is additional. Interrupting or ending a conversation cancels pending speech
+and stops playback; interruption depends on Gemini's recognition events. Failed
+speech requests show an error while the answer remains visible in captions.
+
+Leave both ElevenLabs settings empty to use Gemini's voice. Setting only one
+shows a setup error. Physical speaker playback and live ElevenLabs generation
+require account credentials and manual testing. A production backend must also
+implement `/api/live/speech`; static hosting cannot provide this route.
