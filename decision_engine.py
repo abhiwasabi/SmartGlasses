@@ -1,4 +1,4 @@
-from elevenlabs_voice import speak
+from gemini_reasoner import reason_about_event
 
 
 def calculate_time_to_contact(distance, closing_speed):
@@ -75,6 +75,24 @@ def estimate_closing_speed(
 
     # Safe fallback
     return user_speed
+
+
+def event_urgency(context: str, event: dict):
+    """Return the existing rule-based urgency for a detected event."""
+    if event.get("closing_speed") is not None:
+        closing_speed = float(event["closing_speed"])
+    else:
+        closing_speed = estimate_closing_speed(
+            user_speed=event.get("user_speed", 0.0),
+            object_speed=event.get("object_speed"),
+            object_motion=event.get("object_motion", "stationary"),
+        )
+    return get_urgency(
+        context=context.lower(),
+        event_type=event.get("type"),
+        distance=event.get("distance"),
+        closing_speed=closing_speed,
+    )
 
 
 def get_urgency(
@@ -423,7 +441,8 @@ def decide_response(context: str, event: dict):
 
 def handle_event(
     context: str,
-    event: dict
+    event: dict,
+    goal: str = None,
 ):
     """
     Process an event and speak
@@ -443,16 +462,34 @@ def handle_event(
         f"Event: {event}"
     )
 
-    message = decide_response(
-        context=context,
-        event=event
-    )
+    # The fixed rules provide a fast fallback for known situations. Gemini
+    # can also recognize goals and event types the rules have never seen.
+    try:
+        baseline = decide_response(context=context, event=event)
+        urgency = event_urgency(context, event)
+    except (TypeError, ValueError):
+        baseline = None
+        urgency = "ignore"
+
+    try:
+        low_confidence = float(event.get("confidence", 1.0)) < 0.70
+    except (TypeError, ValueError):
+        low_confidence = False
+
+    if low_confidence:
+        message = None
+    elif baseline and urgency in ("critical", "high"):
+        message = baseline
+    else:
+        message = reason_about_event(context, event, baseline, urgency, goal)
 
     if message:
 
         print(
             f"Decision: {message}"
         )
+
+        from elevenlabs_voice import speak
 
         speak(message)
 
