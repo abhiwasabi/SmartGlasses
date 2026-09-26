@@ -17,6 +17,7 @@ import { deleteRecording, getRecording, saveRecording } from './lib/storage'
 import { formatBytes, formatDuration } from './lib/data'
 import { repairWebmDuration } from './lib/webmClip'
 import { trimRecording } from './lib/trimRecording'
+import { supabase } from './lib/supabase'
 import type { Memory, Note } from './lib/data'
 
 type View = 'Overview' | 'Camera' | 'Notes' | 'Memories'
@@ -99,6 +100,7 @@ function Workspace({ user, accessToken, signOut }: { user: User; accessToken: st
   const workspaceError = storageError || settingsError
   const accountName = user.email ?? 'Your account'
   const accountInitial = accountName.charAt(0).toUpperCase()
+  const [assistantVoiceId, setAssistantVoiceId] = useState(() => typeof user.user_metadata.assistant_voice_id === 'string' ? user.user_metadata.assistant_voice_id : '')
 
   function saveVoiceNote(text: string, finished: boolean, suppliedTitle?: string) {
     if (!text.trim()) return
@@ -118,6 +120,19 @@ function Workspace({ user, accessToken, signOut }: { user: User; accessToken: st
     notify('Voice note discarded.')
   }
 
+  async function selectAssistantVoice(voiceId: string) {
+    const previous = assistantVoiceId
+    setAssistantVoiceId(voiceId)
+    if (!supabase) return
+    const { error } = await supabase.auth.updateUser({ data: { assistant_voice_id: voiceId } })
+    if (error) {
+      setAssistantVoiceId(previous)
+      notify('The assistant voice could not be saved. Please try again.')
+      return
+    }
+    notify('Assistant voice updated.')
+  }
+
   const voice = useVoiceControl({
     onAction(action) {
       if (action === 'record' || action === 'clip') requestCapture(action)
@@ -135,7 +150,7 @@ function Workspace({ user, accessToken, signOut }: { user: User; accessToken: st
     },
   })
 
-  const assistant = useGeminiLive(camera.stream, voice.microphoneId, accessToken, voice.stop, {
+  const assistant = useGeminiLive(camera.stream, voice.microphoneId, accessToken, assistantVoiceId, voice.stop, {
     onCommand(command) {
       if (command === 'start_recording') return requestCapture('record')
       if (command === 'clip_memory') return requestCapture('clip')
@@ -308,7 +323,7 @@ function Workspace({ user, accessToken, signOut }: { user: User; accessToken: st
       <header className="topbar compact-header"><div className="breadcrumb"><button className="icon-button mobile-menu" aria-label="Open navigation" onClick={() => setSidebarOpen(true)}><Menu size={20} /></button><Glasses size={19} strokeWidth={1.5} /><span className="breadcrumb-slash">/</span><span className="dashboard-title"><strong>SmartGlasses</strong><span>{view} dashboard</span></span></div><div className="topbar-actions"><span className="local-indicator"><span className="status-dot" />Account synced</span><div className="avatar avatar-small">{accountInitial}</div><span className="today-date"><span className="date-number">{new Date().getDate()}</span><span className="date-description">{new Date().toLocaleDateString('en-US', { weekday: 'short' })},<br />{new Date().toLocaleDateString('en-US', { month: 'long' })}</span></span></div></header>
       <main className="compact-page">
         {view === 'Overview' && <>
-          <AssistantPanel assistant={assistant} microphoneId={voice.microphoneId} setMicrophoneId={voice.setMicrophoneId} microphones={voice.microphones} refreshMicrophones={voice.refreshMicrophones} />
+          <AssistantPanel assistant={assistant} accessToken={accessToken} voiceId={assistantVoiceId} setVoiceId={selectAssistantVoice} microphoneId={voice.microphoneId} setMicrophoneId={voice.setMicrophoneId} microphones={voice.microphones} refreshMicrophones={voice.refreshMicrophones} />
           <VoicePanel assistantActive={assistant.status !== 'off'} clipSeconds={isRecording && recordingKind.current === 'clip' ? Math.max(0, 15 - camera.elapsed) : null} />
         </>}
         {workspaceError && <div className="storage-error" role="alert"><CloudOff size={17} />{workspaceError}</div>}

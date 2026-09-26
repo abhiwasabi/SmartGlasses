@@ -455,9 +455,10 @@ main.compact-page { padding-top: 24px; }
 .assistant-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .assistant-heading h2 { margin: 0; font-size: 20px; }
 .assistant-heading p, .assistant-hint { color: var(--text-muted, #858585); font-size: 13px; line-height: 1.6; }
-.assistant-setup { display: flex; gap: 16px; margin: 20px 0; }
+.assistant-setup { display: grid; gap: 12px; max-width: 640px; margin: 20px 0; }
 .assistant-setup label { display: grid; gap: 8px; font-size: 12px; flex: 1; min-width: 0; }
 .assistant-setup input, .assistant-setup select { width: 100%; min-width: 0; min-height: 44px; padding: 10px 12px; border: 1px solid #e5e5e5; background: #fff; border-radius: 14px; font: inherit; font-size: 16px; }
+.assistant-setup small { color: #b35c42; line-height: 1.45; }
 .assistant-state { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; font-size: 12px; margin-top: 16px; }
 .assistant-state > span:last-child:not(.status-dot) { color: #777; margin-left: auto; }
 .assistant-active { background: #e66749 !important; }
