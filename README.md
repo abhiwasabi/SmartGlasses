@@ -8,7 +8,7 @@ A React and TypeScript dashboard for the [SmartGlasses project](https://github.c
 - Recording playback and download, with saved recordings included in the memory library.
 - Voice-dictated reminders and lecture notes summarized into readable, titled notes when saved, with manual editing for corrections.
 - A microphone status panel, live transcript, command guide, and optional acknowledgement tones.
-- Voice-triggered 30-second memory clips. The top memory search bar has been removed.
+- Voice-triggered 15-second memory clips. The top memory search bar has been removed.
 - Events and memories organized by Everyday, Work, and Adventure.
 - Settings for the two ESP32-CAM addresses.
 - An empty workspace that contains only notes, recordings, and events you create.
@@ -47,7 +47,7 @@ Choose a camera and configure its address once. Under voice controls, select an 
 | --- | --- |
 | “Start recording” | Connects the selected camera if necessary, then starts recording. |
 | “Stop recording” | Stops and saves the recording to Memories. |
-| “Clip a memory” / “Clip this” | Saves the previous 30 seconds from the connected camera buffer. |
+| “Clip a memory” / “Clip this” | Saves the previous 15 seconds from the connected camera buffer. |
 | “Make a new note” followed by your words | Starts dictation; finalized words are saved to the same note as you speak. |
 | “Save note” | Finishes the current note and returns to command listening. |
 | “Cancel note” | Discards the note being dictated. |
@@ -55,7 +55,7 @@ Choose a camera and configure its address once. Under voice controls, select an 
 
 You can say a complete note in one utterance: “Make a new note remember to charge the glasses save note.” Finish phrases are excluded from saved content. During dictation, recording phrases are treated as note content; finish the note before issuing another recording command. Pausing microphone access preserves finalized text, but unfinished recognition text is not committed.
 
-A clip uses the latest 30 seconds buffered while the camera is connected. Connect the camera and allow the buffer to fill before asking for a clip. The buffer pauses during a longer recording; stop that recording before asking for a memory clip.
+A clip uses the latest 15 seconds buffered while the camera is connected. Connect the camera and allow the buffer to fill before asking for a clip. The buffer pauses during a longer recording; stop that recording before asking for a memory clip.
 
 The frontend uses the [Web Speech API](https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition) with the selected microphone (or system default). This does not add an audio transport to the ESP32 camera firmware. A dedicated glasses microphone needs to be exposed as a browser audio input or integrated with a speech-to-text backend.
 
@@ -143,7 +143,7 @@ Sessions stop after eight minutes or when Gemini closes them; tap Start assistan
 to begin a fresh session. Automatic session resumption is not implemented.
 
 The assistant and browser voice commands are mutually exclusive: starting either
-stops the other. During a Gemini Live session, explicit recording, 30-second clip,
+stops the other. During a Gemini Live session, explicit recording, 15-second clip,
 and note commands use Gemini function calling to trigger the app's existing capture
 and note storage actions. The browser voice controls remain available as a fallback.
 When you say “save note,” Gemini returns a short descriptive title and an

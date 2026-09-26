@@ -18,6 +18,8 @@ export interface Memory {
   duration?: number;
   mimeType?: string;
   size?: number;
+  playbackStart?: number;
+  mediaDuration?: number;
   sample?: boolean;
 }
 
@@ -70,6 +72,8 @@ export function validateMemories(value: unknown): value is Memory[] {
     && isOptionalNonnegativeNumber(memory.duration)
     && isOptionalString(memory.mimeType)
     && isOptionalNonnegativeNumber(memory.size)
+    && isOptionalNonnegativeNumber(memory.playbackStart)
+    && isOptionalNonnegativeNumber(memory.mediaDuration)
     && isOptionalBoolean(memory.sample),
   );
 }

@@ -9,14 +9,16 @@ import { useVoiceControl } from './hooks/useVoiceControl'
 import { useCamera } from './hooks/useCamera'
 import { useEspCamera } from './hooks/useEspCamera'
 import { useLocalState } from './hooks/useLocalState'
-import { deleteRecording, getRecording } from './lib/storage'
+import { deleteRecording, getRecording, saveRecording } from './lib/storage'
 import { formatBytes, formatDuration, initialMemories, initialNotes, validateMemories, validateNotes } from './lib/data'
+import { repairWebmDuration } from './lib/webmClip'
+import { trimRecording } from './lib/trimRecording'
 import type { Memory, Note } from './lib/data'
 
 type View = 'Overview' | 'Camera' | 'Notes' | 'Memories'
 type Source = 'camera1' | 'camera2' | 'browser'
 type CameraSettings = { camera1: string; camera2: string }
-type Recording = { id: string; title: string; createdAt: string; duration: number; mimeType: string; size: number; blob: Blob; persisted: boolean }
+type Recording = { id: string; title: string; createdAt: string; duration: number; mimeType: string; size: number; blob: Blob; persisted: boolean; playbackStart?: number; mediaDuration?: number }
 const validateSettings = (v: unknown): v is CameraSettings => typeof v === 'object' && v !== null && 'camera1' in v && typeof v.camera1 === 'string' && 'camera2' in v && typeof v.camera2 === 'string'
 const navItems = [{ name: 'Overview', icon: LayoutDashboard }, { name: 'Camera', icon: Video }, { name: 'Notes', icon: FileText }, { name: 'Memories', icon: Bookmark }] as const
 const sourceLabels = { camera1: 'ESP32 · Camera 01', camera2: 'ESP32 · Camera 02', browser: 'Device camera' }
@@ -79,7 +81,7 @@ export default function App() {
   const notify = useCallback((message: string) => setToast(message), [])
   const onRecorded = useCallback((recording: Recording) => {
     if (!recording.persisted) sessionRecordings.current.set(recording.id, recording.blob)
-    const memory: Memory = { id: recording.id, title: `${recordingKind.current === 'clip' ? 'Memory clip' : 'Recording'} through ${source === 'browser' ? 'your lens' : source === 'camera1' ? 'camera 01' : 'camera 02'}`, description: recordingKind.current === 'clip' ? 'A hands-free memory clip. Open to watch or download.' : 'Open this memory to watch or download your recording.', createdAt: recording.createdAt, duration: recording.duration, mimeType: recording.mimeType, size: recording.size, kind: 'recording', category: 'Everyday' }
+    const memory: Memory = { id: recording.id, title: `${recordingKind.current === 'clip' ? 'Memory clip' : 'Recording'} through ${source === 'browser' ? 'your lens' : source === 'camera1' ? 'camera 01' : 'camera 02'}`, description: recordingKind.current === 'clip' ? 'A hands-free memory clip. Open to watch or download.' : 'Open this memory to watch or download your recording.', createdAt: recording.createdAt, duration: recording.duration, mimeType: recording.mimeType, size: recording.size, playbackStart: recording.playbackStart, mediaDuration: recording.mediaDuration, kind: 'recording', category: 'Everyday' }
     recordingKind.current = null
     setMemories(previous => [memory, ...previous])
     notify(recording.persisted ? 'Recording saved to your memories.' : 'Recording ready. Download it now—browser storage is unavailable.')
@@ -147,8 +149,8 @@ export default function App() {
     let captureCamera = camera
     if (source !== 'browser' && !settings[source]) {
       if (kind === 'clip' && browserCamera.status !== 'ready') {
-        notify('Connect a camera and leave it connected for 30 seconds before clipping a memory.')
-        return 'A camera must be connected and have a full 30-second buffer before a memory can be clipped.'
+        notify('Connect a camera and leave it connected for 15 seconds before clipping a memory.')
+        return 'A camera must be connected and have a full 15-second buffer before a memory can be clipped.'
       }
       captureCamera = browserCamera
       setSource('browser')
@@ -156,13 +158,13 @@ export default function App() {
     }
     if (kind === 'clip') {
       if (captureCamera.status !== 'ready') {
-        notify('Connect the camera and wait 30 seconds before clipping a memory.')
-        return 'Connect the camera and wait 30 seconds so Clarity can buffer the past before clipping.'
+        notify('Connect the camera and wait 15 seconds before clipping a memory.')
+        return 'Connect the camera and wait 15 seconds so Clarity can buffer the past before clipping.'
       }
       recordingKind.current = 'clip'
       captureIntent.current = 'clip'
-      notify('Saving the previous 30 seconds…')
-      void captureCamera.clipPast30Seconds().then(result => {
+      notify('Saving the previous 15 seconds…')
+      void captureCamera.clipPast15Seconds().then(result => {
         captureIntent.current = null
         if (!result.ok) { recordingKind.current = null; notify(result.message) }
       }).catch(() => {
@@ -170,7 +172,7 @@ export default function App() {
         recordingKind.current = null
         notify('The recent footage could not be saved. Reconnect the camera and try again.')
       })
-      return 'Saving the previous 30 seconds now. Do not say it captured future footage.'
+      return 'Saving the previous 15 seconds now. Do not say it captured future footage.'
     }
     recordingKind.current = kind
     captureIntent.current = kind
@@ -184,12 +186,6 @@ export default function App() {
     if (camera.status === 'ready') { captureIntent.current = null; camera.startRecording(); setPendingCapture(null) }
     else if (camera.status === 'disconnected' && camera.error) { captureIntent.current = null; setPendingCapture(null); recordingKind.current = null; notify(camera.error) }
   }, [pendingCapture, camera.status, camera.error, camera.startRecording, notify])
-  useEffect(() => {
-    if (!isRecording || recordingKind.current !== 'clip') return
-    const timer = window.setTimeout(camera.stopRecording, 30_000)
-    return () => window.clearTimeout(timer)
-  }, [isRecording, camera.stopRecording])
-
   useEffect(() => {
     setNotes(previous => previous.some(isLegacySampleNote) ? previous.filter(note => !isLegacySampleNote(note)) : previous)
     setMemories(previous => previous.some(memory => memory.sample) ? previous.filter(memory => !memory.sample) : previous)
@@ -208,13 +204,28 @@ export default function App() {
         const blob = sessionRecordings.current.get(selectedMemory.id) ?? await getRecording(selectedMemory.id)
         if (cancelled) return
         if (!blob) throw new Error('This recording is no longer in this browser’s storage.')
-        url = URL.createObjectURL(blob); setRecordingUrl(url)
+        const needsTrim = (selectedMemory.playbackStart ?? 0) > 0
+        const playableBlob = needsTrim
+          ? await trimRecording(blob, selectedMemory.mediaDuration ?? 0, selectedMemory.duration ?? 15)
+          : await repairWebmDuration(blob, selectedMemory.mediaDuration ?? selectedMemory.duration ?? 30)
+        if (cancelled) return
+        if (playableBlob !== blob) {
+          if (sessionRecordings.current.has(selectedMemory.id)) sessionRecordings.current.set(selectedMemory.id, playableBlob)
+          try {
+            await saveRecording(selectedMemory.id, playableBlob)
+            if (needsTrim) setMemories(previous => previous.map(memory => memory.id === selectedMemory.id
+              ? { ...memory, playbackStart: 0, mediaDuration: memory.duration, size: playableBlob.size }
+              : memory))
+          } catch { /* Keep the original metadata if the repaired video could not be persisted. */ }
+        }
+        if (cancelled) return
+        url = URL.createObjectURL(playableBlob); setRecordingUrl(url)
       } catch (error) { if (!cancelled) setRecordingError(error instanceof Error ? error.message : 'The recording could not be loaded.') }
       finally { if (!cancelled) setRecordingLoading(false) }
     }
     void load()
     return () => { cancelled = true; if (url) URL.revokeObjectURL(url) }
-  }, [selectedMemory])
+  }, [selectedMemory, setMemories])
   useEffect(() => {
     if (!isRecording) return
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault() }
@@ -301,14 +312,14 @@ export default function App() {
         </>}
         {view === 'Camera' && <><div className="full-camera">{cameraPanel}</div><div className="camera-info"><Wifi size={19} /><div><h3>Two cameras. Your point of view.</h3><p>Add the Wi-Fi address of each ESP32-CAM in settings, then choose a camera above. Recordings from the selected camera stay in this browser.</p></div><button className="button button-secondary" onClick={() => setModal('settings')}>Configure cameras <ArrowUpRight size={14} /></button></div></>}
         {view === 'Notes' && <section className="panel notes-workspace"><div className="notes-list"><div className="notes-search"><Search size={15} /><input aria-label="Search notes" placeholder="Search your notes" value={noteSearch} onChange={e => setNoteSearch(e.target.value)} /></div><div className="notes-list-items">{notes.filter(note => `${note.title} ${note.body}`.toLowerCase().includes(noteSearch.toLowerCase())).map(note => <button key={note.id} className={`note-list-item ${selectedNote?.id === note.id ? 'selected' : ''}`} onClick={() => setSelectedNoteId(note.id)}><div><span className="tag">{note.tag}</span></div><h3>{note.title || 'Untitled note'}</h3><p>{note.body || 'Your next thought starts here…'}</p><span className="note-list-date">{dateLabel(note.updatedAt)} · {timeLabel(note.updatedAt)}</span></button>)}{!notes.some(note => `${note.title} ${note.body}`.toLowerCase().includes(noteSearch.toLowerCase())) && <p className="list-empty">No notes found. Try another search.</p>}</div><button className="new-note-list typed-note-link" onClick={addNote}><Plus size={13} /> Write a note</button></div><div className="full-note-editor"><div className="full-note-toolbar"><span><FileText size={15} /> Your notebook</span>{selectedNote && <button className="icon-button" aria-label="Delete selected note" disabled={voice.mode === 'dictating' && selectedNote?.id === voiceNoteId.current} onClick={() => { setNotes(previous => previous.filter(note => note.id !== selectedNote.id)); notify('Note deleted.') }}><Trash2 size={16} /></button>}</div>{noteEditor}</div></section>}
-        {(view === 'Overview' || view === 'Memories') && <section className="memories-section"><div className="section-heading"><div><h2>{view === 'Overview' ? 'Worth remembering' : 'Your memory collection'}<span className="small-count">{memories.length}</span></h2><p>{view === 'Overview' ? 'Small moments. A bigger picture.' : 'Find your way back to a moment.'}</p></div>{view === 'Overview' && <button className="text-button" onClick={() => navigate('Memories')}>View all memories <ArrowRight size={15} /></button>}{view === 'Memories' && <span className="collection-storage"><HardDrive size={14} />{formatBytes(memories.reduce((sum, memory) => sum + (memory.size ?? 0), 0))} stored locally</span>}</div>{memories.length ? <div className="memory-grid">{(view === 'Overview' ? memories.slice(0, 3) : memories).map(memory => <MemoryCard key={memory.id} memory={memory} sessionBlob={sessionRecordings.current.get(memory.id)} onOpen={() => setSelectedMemory(memory)} />)}</div> : <div className="empty-state memory-empty"><Bookmark size={30} /><h3>Your next memory starts with your voice.</h3><p>Say “clip a memory” to save the previous 30 seconds, or “start recording” for a longer recording.</p></div>}</section>}
+        {(view === 'Overview' || view === 'Memories') && <section className="memories-section"><div className="section-heading"><div><h2>{view === 'Overview' ? 'Worth remembering' : 'Your memory collection'}<span className="small-count">{memories.length}</span></h2><p>{view === 'Overview' ? 'Small moments. A bigger picture.' : 'Find your way back to a moment.'}</p></div>{view === 'Overview' && <button className="text-button" onClick={() => navigate('Memories')}>View all memories <ArrowRight size={15} /></button>}{view === 'Memories' && <span className="collection-storage"><HardDrive size={14} />{formatBytes(memories.reduce((sum, memory) => sum + (memory.size ?? 0), 0))} stored locally</span>}</div>{memories.length ? <div className="memory-grid">{(view === 'Overview' ? memories.slice(0, 3) : memories).map(memory => <MemoryCard key={memory.id} memory={memory} sessionBlob={sessionRecordings.current.get(memory.id)} onOpen={() => setSelectedMemory(memory)} />)}</div> : <div className="empty-state memory-empty"><Bookmark size={30} /><h3>Your next memory starts with your voice.</h3><p>Say “clip a memory” to save the previous 15 seconds, or “start recording” for a longer recording.</p></div>}</section>}
         <footer className="page-footer"><span><Glasses size={16} />A little more present. A little more clarity.</span><span><HardDrive size={12} />Saved on your device<span className="footer-dot">·</span>Built for the moments in between</span></footer>
       </main>
     </div>
     <nav className="mobile-bottom-nav" aria-label="Mobile navigation">{navItems.map(item => <button key={item.name} aria-current={view === item.name ? 'page' : undefined} className={view === item.name ? 'active' : ''} onClick={() => navigate(item.name)}><item.icon size={21} strokeWidth={1.7} /><span>{item.name}</span></button>)}</nav>
     {toast && <div className="toast" role="status"><span className="toast-icon"><Check size={15} /></span>{toast}<button className="icon-button" aria-label="Dismiss notification" onClick={() => setToast('')}><X size={14} /></button></div>}
     {modal === 'settings' && <Modal title="Your camera setup" subtitle="Two perspectives. One place to remember them." onClose={() => setModal(null)}><form className="modal-form" onSubmit={saveSettings}><div className="settings-intro"><Wifi size={21} /><p>Connect your computer and both ESP32-CAM modules to the same Wi-Fi network. Enter each camera’s local address below.</p></div><label><span><Camera size={14} />Camera 01 · ESP32-CAM</span><input name="camera1" type="url" placeholder="http://192.168.1.100" defaultValue={settings.camera1} disabled={isBusy} /><small>The camera’s root address, without /stream or /capture.</small></label><label><span><Camera size={14} />Camera 02 · ESP32-CAM</span><input name="camera2" type="url" placeholder="http://192.168.1.101" defaultValue={settings.camera2} disabled={isBusy} /></label><div className="settings-note"><Radio size={16} /><p>Made for Espressif’s standard CameraWebServer firmware. Wi-Fi sends the footage; the serial adapters are used for device setup. ESP32 recordings are video-only.</p></div><div className="settings-note"><HardDrive size={16} /><p>Notes and memories stay in this browser. Download recordings you want to keep outside this device.</p></div>{isBusy && <p className="form-warning">Finish recording or connecting before changing camera settings.</p>}<div className="form-footer"><button type="button" className="button button-secondary" onClick={() => setModal(null)}>Cancel</button><button type="submit" className="button button-primary" disabled={isBusy}><Check size={15} />Save settings</button></div></form></Modal>}
-    {modal === 'help' && <Modal title="A little help getting started" subtitle="Make room for what matters." onClose={() => setModal(null)}><div className="help-content"><div><span className="help-number">01</span><section><h3>Connect your perspective</h3><p>Configure your two ESP32-CAM addresses in Settings, choose Camera 01 or Camera 02, and connect. Use This device to try it with your phone or computer’s camera.</p></section></div><div><span className="help-number">02</span><section><h3>Keep a moment, hands-free</h3><p>In Ask your glasses, say “start recording” and “stop recording” to save a video. Say “clip a memory” to save the previous 30 seconds; connect the camera and wait for its buffer to fill first.</p></section></div><div><span className="help-number">03</span><section><h3>Speak your notes</h3><p>In Ask your glasses, say “make a new note” for a reminder or “take lecture notes” during a class, then speak naturally. Say “save note” to get a titled, organized summary, or “cancel note” to discard it. Your draft is saved as you speak.</p></section></div><div className="help-local"><HardDrive size={17} /><p>Voice uses your browser’s default microphone and may send speech to its recognition service. Keep this page open. Clearing browser data removes saved notes and recordings. ESP32 connections need the local dashboard server running on the same network.</p></div></div></Modal>}
+    {modal === 'help' && <Modal title="A little help getting started" subtitle="Make room for what matters." onClose={() => setModal(null)}><div className="help-content"><div><span className="help-number">01</span><section><h3>Connect your perspective</h3><p>Configure your two ESP32-CAM addresses in Settings, choose Camera 01 or Camera 02, and connect. Use This device to try it with your phone or computer’s camera.</p></section></div><div><span className="help-number">02</span><section><h3>Keep a moment, hands-free</h3><p>In Ask your glasses, say “start recording” and “stop recording” to save a video. Say “clip a memory” to save the previous 15 seconds; connect the camera and wait for its buffer to fill first.</p></section></div><div><span className="help-number">03</span><section><h3>Speak your notes</h3><p>In Ask your glasses, say “make a new note” for a reminder or “take lecture notes” during a class, then speak naturally. Say “save note” to get a titled, organized summary, or “cancel note” to discard it. Your draft is saved as you speak.</p></section></div><div className="help-local"><HardDrive size={17} /><p>Voice uses your browser’s default microphone and may send speech to its recognition service. Keep this page open. Clearing browser data removes saved notes and recordings. ESP32 connections need the local dashboard server running on the same network.</p></div></div></Modal>}
     {selectedMemory && <Modal title={selectedMemory.title} subtitle={`${dateLabel(selectedMemory.createdAt)} at ${timeLabel(selectedMemory.createdAt)} · ${selectedMemory.category}`} onClose={() => setSelectedMemory(null)} wide><div className="memory-detail">{selectedMemory.kind === 'recording' ? <div className="recording-player">{recordingLoading ? <div className="player-message"><LoaderCircle className="spin" />Loading your moment…</div> : recordingError ? <div className="player-message"><Video size={28} /><p>{recordingError}</p></div> : recordingUrl && <video key={recordingUrl} controls playsInline src={recordingUrl} />}</div> : selectedMemory.image ? <img className="detail-image" src={selectedMemory.image} alt={selectedMemory.title} /> : <div className="detail-illustration"><Bookmark size={48} strokeWidth={1.2} /><span>A little moment. A lasting memory.</span></div>}<p className="detail-description">{selectedMemory.description || 'Sometimes a moment speaks for itself.'}</p>{selectedMemory.kind === 'recording' && <div className="recording-details"><span><Clock3 size={14} />{formatDuration(selectedMemory.duration ?? 0)}</span><span><HardDrive size={14} />{formatBytes(selectedMemory.size ?? 0)}</span></div>}<div className="detail-actions">{confirmDelete ? <div className="delete-confirm"><span>Delete this memory?</span><button className="button button-danger" disabled={deleting} onClick={() => void removeMemory()}>{deleting ? 'Deleting…' : 'Delete'}</button><button className="button button-secondary" onClick={() => setConfirmDelete(false)}>Keep it</button></div> : <button className="text-button delete-button" onClick={() => setConfirmDelete(true)}><Trash2 size={15} />Delete memory</button>}{recordingUrl && <a className="button button-primary" href={recordingUrl} download={`clarity-${selectedMemory.id}.${selectedMemory.mimeType?.includes('mp4') ? 'mp4' : 'webm'}`}><ArrowDownToLine size={15} />Download recording</a>}</div></div></Modal>}
   </div>
 }
