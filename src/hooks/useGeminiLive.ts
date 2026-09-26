@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Session, LiveServerMessage } from '@google/genai'
 import { encodePcm, decodePcm } from '../lib/liveAudio'
+import { LIVE_TOOLS } from '../lib/liveTools'
 
 type Status = 'off' | 'connecting' | 'listening' | 'speaking'
 type Caption = { role: 'You' | 'Assistant'; text: string }
-export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: string, beforeStart: () => void) {
+type LiveActions = {
+  onCommand: (command: string) => string
+  onNote: (text: string, finished: boolean, title?: string) => void
+  onCancelNote: () => void
+  onNoteMode: (active: boolean) => void
+}
+export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: string, beforeStart: () => void, actions: LiveActions) {
   const [status, setStatus] = useState<Status>('off')
   const [error, setError] = useState('')
   const [captions, setCaptions] = useState<Caption[]>([])
@@ -13,6 +20,8 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
   const cleanup = useRef<(() => void) | null>(null)
   const camera = useRef(cameraStream)
   camera.current = cameraStream
+  const actionsRef = useRef(actions)
+  actionsRef.current = actions
   const starting = useRef(false)
 
   const stop = useCallback(() => {
@@ -44,6 +53,9 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
     const speakers = new Set<AudioBufferSourceNode>()
     let nextAudioTime = 0
     let elevenLabs = false
+    let assistantNoteActive = false
+    let assistantNoteDraft = ''
+    let transcriptBeforeTools = ''
     let replyText = ''
     let speechGeneration = 0
     let speechQueue = Promise.resolve()
@@ -60,6 +72,12 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
     const release = () => {
       if (releaseDone) return
       releaseDone = true
+      if (assistantNoteActive && assistantNoteDraft.trim()) {
+        actionsRef.current.onNote(finishNoteText(assistantNoteDraft), true)
+        assistantNoteActive = false
+        assistantNoteDraft = ''
+        actionsRef.current.onNoteMode(false)
+      }
       tokenRequest.abort()
       window.clearInterval(frameTimer); window.clearTimeout(durationTimer)
       capture?.disconnect(); source?.disconnect()
@@ -80,6 +98,62 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
           ? [...previous.slice(0, -1), { role, text: (last.text + text).slice(-4000) }]
           : [...previous.slice(-11), { role, text }]
       })
+    }
+    const startNoteText = (text: string) => text
+      .replace(/^\s*(?:(?:all\s+right|alright|okay|ok|sure|yes|hey)[,!.?\s]+)*(?:(?:can|could|would)\s+you\s+)?(?:i\s+want\s+to\s+)?(?:please\s+)?(?:make|create|start)\s+(?:me\s+)?(?:a\s+)?new\s+note(?:\s+for\s+me)?[,:.!?\s]*/i, '')
+      .replace(/^\s*(?:(?:all\s+right|alright|okay|ok|sure|yes|hey)[,!.?\s]+)*(?:(?:can|could|would)\s+you\s+)?(?:i\s+want\s+to\s+)?(?:please\s+)?(?:take|start)\s+(?:some\s+)?(?:lecture\s+)?notes?\b[,:.!?\s]*/i, '')
+      .replace(/\s+(?:save|finish)\s+(?:the\s+)?note[.!?]*\s*$/i, '').trim()
+    const finishNoteText = (text: string) => text.replace(/\s+(?:save|finish)\s+(?:the\s+)?note[.!?]*\s*$/i, '').trim()
+    const handleToolCalls = (message: LiveServerMessage) => {
+      const calls = message.toolCall?.functionCalls
+      if (!calls?.length || !session) return
+      const functionResponses = calls.map(call => {
+        let result: string
+        switch (call.name) {
+          case 'start_recording':
+          case 'stop_recording':
+          case 'clip_memory':
+            result = actionsRef.current.onCommand(call.name)
+            break
+          case 'start_note':
+            assistantNoteActive = true
+            assistantNoteDraft = startNoteText(transcriptBeforeTools)
+            transcriptBeforeTools = ''
+            if (assistantNoteDraft) actionsRef.current.onNote(assistantNoteDraft, false)
+            actionsRef.current.onNoteMode(true)
+            result = 'Note capture started. Confirm to the user. Keep collecting the spoken content and summarize it when the user asks to save.'
+            break
+          case 'save_note': {
+            const transcript = finishNoteText(assistantNoteActive ? assistantNoteDraft : startNoteText(transcriptBeforeTools))
+            const noteContent = typeof call.args?.content === 'string' ? call.args.content.trim() : ''
+            const noteTitle = typeof call.args?.title === 'string' ? call.args.title.trim() : ''
+            const note = noteContent || transcript
+            if (!note) {
+              result = 'The note is empty. Ask the user to dictate note text before saving.'
+              break
+            }
+            actionsRef.current.onNote(note, true, noteTitle || undefined)
+            assistantNoteActive = false
+            assistantNoteDraft = ''
+            transcriptBeforeTools = ''
+            actionsRef.current.onNoteMode(false)
+            result = 'The organized note summary was saved.'
+            break
+          }
+          case 'cancel_note':
+            if (assistantNoteActive) actionsRef.current.onCancelNote()
+            assistantNoteActive = false
+            assistantNoteDraft = ''
+            transcriptBeforeTools = ''
+            actionsRef.current.onNoteMode(false)
+            result = 'The note was discarded.'
+            break
+          default:
+            result = 'Unknown action. Do not claim it was completed.'
+        }
+        return { id: call.id, name: call.name, response: { result } }
+      })
+      session.sendToolResponse({ functionResponses })
     }
     const speakReply = (text: string) => {
       const speechRun = speechGeneration
@@ -121,12 +195,18 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
       if (!current()) return
       if (message.goAway) { fail('This session is ending. Tap Start assistant to reconnect.'); return }
       const content = message.serverContent
-      if (!content) return
-      if (content.interrupted) { clearSpeaker(); setStatus('listening') }
-      if (content.inputTranscription?.text) {
+      if (content?.interrupted) { clearSpeaker(); setStatus('listening') }
+      if (content?.inputTranscription?.text) {
         if (elevenLabs && (speechRequests.size || speakers.size)) { clearSpeaker(); setStatus('listening') }
         addCaption('You', content.inputTranscription.text)
+        if (assistantNoteActive) {
+          const segment = finishNoteText(content.inputTranscription.text)
+          if (segment) assistantNoteDraft = `${assistantNoteDraft}${assistantNoteDraft ? ' ' : ''}${segment}`.trim()
+          if (assistantNoteDraft) actionsRef.current.onNote(assistantNoteDraft, false)
+        } else transcriptBeforeTools = `${transcriptBeforeTools} ${content.inputTranscription.text}`.trim().slice(-4000)
       }
+      handleToolCalls(message)
+      if (!content) return
       if (content.outputTranscription?.text) {
         addCaption('Assistant', content.outputTranscription.text)
         if (elevenLabs && !content.interrupted) {
@@ -142,8 +222,10 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
         if (content.turnComplete && replyText.trim()) {
           speakReply(replyText.trim()); replyText = ''
         }
+        if (content.turnComplete && !assistantNoteActive) transcriptBeforeTools = ''
         return
       }
+      if (content.turnComplete && !assistantNoteActive) transcriptBeforeTools = ''
       for (const part of content.modelTurn?.parts ?? []) {
         if (!part.inlineData?.data || !part.inlineData.mimeType?.startsWith('audio/pcm')) continue
         try {
@@ -182,7 +264,7 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
       if (!current()) return
       const ai = new GoogleGenAI({ apiKey: data.token, httpOptions: { apiVersion: 'v1beta' } })
       session = await ai.live.connect({ model: data.model, config: {
-        responseModalities: [Modality.AUDIO], inputAudioTranscription: {}, outputAudioTranscription: {},
+        responseModalities: [Modality.AUDIO], inputAudioTranscription: {}, outputAudioTranscription: {}, tools: LIVE_TOOLS,
       }, callbacks: {
         onmessage: onMessage,
         onerror: () => fail('The Gemini connection failed. Check your internet connection and Live model access, then start again.'),

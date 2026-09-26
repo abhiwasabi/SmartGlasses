@@ -5,7 +5,7 @@ export const emptyVoiceState: VoiceState = { mode: 'commands', draft: '' }
 
 function normalized(text: string) { return text.toLowerCase().replace(/[.,!?;:]+$/g, '').trim() }
 const exactCommands: Record<string, VoiceAction> = {
-  'record this message': 'record', 'start recording': 'record', 'record this': 'record',
+  'start recording': 'record',
   'stop recording': 'stop-recording', 'stop the recording': 'stop-recording', 'save recording': 'stop-recording',
   'clip a memory': 'clip', 'clip this memory': 'clip', 'clip this': 'clip', 'clip that': 'clip',
   'stop listening': 'pause', 'pause listening': 'pause', 'pause voice': 'pause',
@@ -39,5 +39,5 @@ export function interpretSpeech(state: VoiceState, transcript: string): VoiceRes
   }
   const action = exactCommands[command]
   if (action) return { state, action, feedback: action === 'pause' ? 'Microphone paused.' : 'Command received.' }
-  return { state, action: null, feedback: 'Try “record this message”, “make a new note”, or “clip a memory”.' }
+  return { state, action: null, feedback: 'Try “start recording”, “make a new note”, or “clip a memory”.' }
 }

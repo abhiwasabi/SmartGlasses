@@ -3,12 +3,12 @@ import assert from 'node:assert/strict'
 import { emptyVoiceState, interpretSpeech } from '../src/lib/voiceCommands.ts'
 
 test('recognizes recording and clipping commands regardless of case or end punctuation', () => {
-  for (const [text, action] of [['Record this message.', 'record'], ['START RECORDING!', 'record'], ['Stop recording.', 'stop-recording'], ['Clip a memory', 'clip'], ['Clip this memory!', 'clip'], ['stop listening', 'pause']]) {
+  for (const [text, action] of [['START RECORDING!', 'record'], ['Stop recording.', 'stop-recording'], ['Clip a memory', 'clip'], ['Clip this memory!', 'clip'], ['stop listening', 'pause']]) {
     assert.equal(interpretSpeech(emptyVoiceState, text).action, action)
   }
 })
 test('does not activate recordings from conversational mentions', () => {
-  for (const text of ['He said record this message yesterday.', 'Do not start recording', 'I want to clip a memory someday', 'new notebook']) {
+  for (const text of ['Record this message.', 'He said record this message yesterday.', 'Do not start recording', 'I want to clip a memory someday', 'new notebook']) {
     const result = interpretSpeech(emptyVoiceState, text)
     assert.equal(result.action, null)
     assert.equal(result.state.mode, 'commands')
