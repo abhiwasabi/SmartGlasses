@@ -583,7 +583,7 @@ main.drive-mode-active .assistant-panel { margin: 20px auto; }
 }
 .statefarm-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   padding: 0 24px 16px;
 }
@@ -599,11 +599,20 @@ main.drive-mode-active .assistant-panel { margin: 20px auto; }
   cursor: pointer;
   transition: all 0.15s ease;
   color: #d32f2f;
+  text-decoration: none;
 }
 .statefarm-action-btn:hover {
   background: #ffebee;
   border-color: #d32f2f;
   transform: translateY(-1px);
+}
+.statefarm-action-btn.official-filer-btn {
+  background: #fff8f8;
+  border-color: #ef9a9a;
+}
+.statefarm-action-btn.official-filer-btn:hover {
+  background: #ffebee;
+  border-color: #b71c1c;
 }
 .statefarm-action-btn strong {
   display: block;
@@ -640,6 +649,25 @@ main.drive-mode-active .assistant-panel { margin: 20px auto; }
   align-items: center;
   gap: 4px;
 }
+.button-claim-file {
+  font-size: 11px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: #d32f2f;
+  color: #ffffff;
+  border: 1px solid #b71c1c;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+.button-claim-file:hover {
+  background: #b71c1c;
+  transform: translateY(-1px);
+}
 .button-claim-export {
   font-size: 11px;
   padding: 6px 12px;
@@ -655,6 +683,28 @@ main.drive-mode-active .assistant-panel { margin: 20px auto; }
 }
 .button-claim-export:hover {
   background: #ffcdd2;
+}
+.button-claim-portal {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #d32f2f;
+  color: #ffffff !important;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 10px;
+  text-decoration: none;
+  margin-top: 8px;
+  transition: background 0.15s ease;
+}
+.button-claim-portal:hover {
+  background: #b71c1c;
+}
+@media (max-width: 1024px) {
+  .statefarm-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 @media (max-width: 640px) {
   .statefarm-actions {

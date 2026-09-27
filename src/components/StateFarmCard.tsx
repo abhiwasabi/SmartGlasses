@@ -1,4 +1,4 @@
-import { Car, FileText, Lock, ShieldAlert, ShieldCheck } from 'lucide-react'
+import { Car, ExternalLink, FileText, Lock, ShieldAlert, ShieldCheck } from 'lucide-react'
 
 type Props = {
   onOpenChecklist: () => void
@@ -21,7 +21,7 @@ export function StateFarmCard({ onOpenChecklist, onOpenSafePark, onOpenClaims, c
               <span className="statefarm-tag-sub">SHELLHACKS 2026</span>
             </div>
             <h2>Student Claims & Risk Co-Pilot</h2>
-            <p>Hands-free accident preparedness & everyday theft/hazard prevention for student drivers.</p>
+            <p>Hands-free accident preparedness, evidence capture & everyday theft/hazard prevention for student drivers.</p>
           </div>
         </div>
       </div>
@@ -47,6 +47,19 @@ export function StateFarmCard({ onOpenChecklist, onOpenSafePark, onOpenClaims, c
             <small>{claimsCount > 0 ? `${claimsCount} saved claim packet${claimsCount > 1 ? 's' : ''}` : 'No active claims filed'}</small>
           </div>
         </button>
+        <a
+          href="https://reportloss.claims.statefarm.com/start-claim"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="statefarm-action-btn official-filer-btn"
+          title="Open State Farm's official digital claim filer"
+        >
+          <ExternalLink size={18} />
+          <div>
+            <strong>Official Claim Filer</strong>
+            <small>reportloss.claims.statefarm.com</small>
+          </div>
+        </a>
       </div>
       <div className="statefarm-hint">
         <ShieldCheck size={16} />

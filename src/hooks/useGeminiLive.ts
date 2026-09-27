@@ -172,6 +172,8 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
             const content = [
               `STATE FARM AUTO INCIDENT PACKET`,
               `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+              `Official Online Claim Filer: https://reportloss.claims.statefarm.com/start-claim`,
+              `State Farm 24/7 Claims Phone: 1-800-SF-CLAIM (1-800-732-5246)`,
               `Timestamp: ${new Date().toLocaleString()}`,
               `Location: ${location}`,
               ``,
@@ -186,7 +188,7 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
               `${narrative}`,
               ``,
               `STATE FARM CLAIMS PROTOCOL FOR STUDENTS`,
-              `1. Call State Farm 24/7 Claims at 1-800-SF-CLAIM (1-800-732-5246) or file in the State Farm app.`,
+              `1. Go to https://reportloss.claims.statefarm.com/start-claim or call 1-800-SF-CLAIM.`,
               `2. Share this incident packet and your glasses recording timestamps with your adjuster.`,
               `3. Exchange contact details with the other driver without discussing fault.`,
             ].join('\n')
