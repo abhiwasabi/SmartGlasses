@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Session, LiveServerMessage } from '@google/genai'
 import { encodePcm, decodePcm } from '../lib/liveAudio'
 import { DRIVE_MODE_TOOLS, LIVE_TOOLS } from '../lib/liveTools'
-import { WAYMO_PICKUP_ZONES, calculateDynamicRoute, getNearbyWaymos } from '../lib/waymoMobility'
+import { WAYMO_PICKUP_ZONES, calculateDynamicRoute } from '../lib/waymoMobility'
 import type { AssistantMode } from '../lib/assistantMode'
 
 type Status = 'off' | 'connecting' | 'listening' | 'speaking'
@@ -228,15 +228,10 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
           case 'get_safe_mobility_route': {
             const rawDest = typeof call.args?.destination === 'string' ? call.args.destination.trim() : ''
             const route = calculateDynamicRoute(rawDest || 'Green Library')
-            const nearbyWaymos = getNearbyWaymos(rawDest)
-            const title = `Waymo Safe Route · ${route.destination}`
+            const title = `Safe Route · ${route.destination}`
             const stepsList = route.steps.map(s => `${s.stepNumber}. [${s.distance}] ${s.instruction}`).join('\n')
-            const spokenTurns = route.steps.map(s => `Turn ${s.stepNumber} (${s.distance}): ${s.audioText}`).join(' ')
-            const waymoSummary = nearbyWaymos.slice(0, 3).map(v =>
-              `• Vehicle ${v.id} (${v.vehicleModel}, Plate ${v.licensePlate}) · ETA ${v.etaMinutes} min to ${v.nearestBay} · Rooftop Beacon: "${v.beaconInitial}" (${v.beaconColor})`
-            ).join('\n')
             const content = [
-              `WAYMO SAFE MOBILITY & PEDESTRIAN ROUTE`,
+              `SAFE MOBILITY & PEDESTRIAN ROUTE`,
               `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
               `Destination: ${route.destination}`,
               `Route Corridor: ${route.name}`,
@@ -246,24 +241,19 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
               `Night Illumination Safety: ${route.nightSafety}`,
               `Google Maps Directions: ${route.googleMapsUrl}`,
               ``,
-              `STEP-BY-STEP SPOKEN TURNS`,
+              `STEP-BY-STEP DIRECTIONS`,
               `${stepsList}`,
-              ``,
-              `AUTONOMOUS FLEET: NEARBY WAYMOS ACTIVE`,
-              `${waymoSummary}`,
               ``,
               `PEDESTRIAN & MOBILITY SAFETY HIGHLIGHTS`,
               ...route.routeHighlights.map(h => `• ${h}`),
               ``,
-              `WAYMO PEDESTRIAN SHIELD PROTOCOL`,
+              `PEDESTRIAN SAFETY PROTOCOL`,
               `• Keep head up and eyes alert at garage exits and service driveways.`,
               `• Only enter crosswalks when the pedestrian signal actively displays Walk.`,
             ].join('\n')
 
             actionsRef.current.onNote(content, true, title, 'Waymo Mobility')
-            const nearest = nearbyWaymos[0]
-            const waymoText = nearest ? ` There is also an autonomous Waymo vehicle ${nearest.etaMinutes} minutes away at ${nearest.nearestBay} with rooftop beacon ${nearest.beaconInitial}.` : ''
-            result = `Clarity calculated the safe pedestrian route to ${route.destination} (${route.distance}, ${route.walkingTime} walk). Turn guidance: ${spokenTurns}.${waymoText} Saved complete route and nearby Waymo fleet to notes.`
+            result = `Clarity calculated the route to ${route.destination} (${route.distance}, ${route.walkingTime} walk). Saved complete directions to dashboard notes with Google Maps link.`
             break
           }
           default:

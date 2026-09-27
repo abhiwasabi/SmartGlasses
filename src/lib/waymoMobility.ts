@@ -251,54 +251,6 @@ export const MOBILITY_ROUTES: MobilityRoute[] = [
   },
 ]
 
-export type WaymoVehicle = {
-  id: string
-  vehicleModel: string
-  licensePlate: string
-  beaconInitial: string
-  beaconColor: string
-  status: 'Available' | 'Arriving' | 'In Transit'
-  etaMinutes: number
-  distanceMeters: number
-  nearestBay: string
-}
-
-export const NEARBY_WAYMO_FLEET: WaymoVehicle[] = [
-  {
-    id: 'waymo-402',
-    vehicleModel: 'Jaguar I-PACE · Autonomous Gen 5',
-    licensePlate: 'FL · WMO-402',
-    beaconInitial: 'CL',
-    beaconColor: '#00A3FF',
-    status: 'Available',
-    etaMinutes: 2,
-    distanceMeters: 180,
-    nearestBay: 'Green Library & Quad (West Curb)',
-  },
-  {
-    id: 'waymo-118',
-    vehicleModel: 'Jaguar I-PACE · Autonomous Gen 5',
-    licensePlate: 'FL · WMO-118',
-    beaconInitial: 'SF',
-    beaconColor: '#10B981',
-    status: 'Arriving',
-    etaMinutes: 4,
-    distanceMeters: 360,
-    nearestBay: 'Graham Center (North Loop)',
-  },
-  {
-    id: 'waymo-890',
-    vehicleModel: 'Jaguar I-PACE · Autonomous Gen 5',
-    licensePlate: 'FL · WMO-890',
-    beaconInitial: 'AZ',
-    beaconColor: '#F59E0B',
-    status: 'Available',
-    etaMinutes: 6,
-    distanceMeters: 540,
-    nearestBay: 'Red Garage Transit Hub',
-  },
-]
-
 export type CampusSpot = {
   name: string
   shortLabel: string
@@ -768,16 +720,4 @@ export function calculateDynamicRoute(destinationInput: string, origin = 'Curren
       },
     ],
   }
-}
-
-export function getNearbyWaymos(destinationQuery?: string): WaymoVehicle[] {
-  if (!destinationQuery) return NEARBY_WAYMO_FLEET
-  const q = destinationQuery.toLowerCase()
-  return [...NEARBY_WAYMO_FLEET].sort((a, b) => {
-    const aMatch = a.nearestBay.toLowerCase().includes(q)
-    const bMatch = b.nearestBay.toLowerCase().includes(q)
-    if (aMatch && !bMatch) return -1
-    if (!aMatch && bMatch) return 1
-    return a.etaMinutes - b.etaMinutes
-  })
 }

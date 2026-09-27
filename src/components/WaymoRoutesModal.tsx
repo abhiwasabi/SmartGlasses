@@ -1,10 +1,9 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   ArrowUp,
   ArrowUpLeft,
   ArrowUpRight,
-  Car,
   Compass,
   CornerUpLeft,
   CornerUpRight,
@@ -12,26 +11,17 @@ import {
   MapPin,
   Mic,
   Navigation,
-  Pause,
-  Play,
-  RotateCcw,
   Route,
   Search,
   ShieldAlert,
   ShieldCheck,
-  SkipBack,
-  SkipForward,
-  Sparkles,
-  Volume2,
   X,
 } from 'lucide-react'
 import {
   calculateDynamicRoute,
-  getNearbyWaymos,
   POPULAR_CAMPUS_SPOTS,
   type MobilityRoute,
   type RouteStep,
-  type WaymoVehicle,
 } from '../lib/waymoMobility'
 
 function StepIcon({ type }: { type: RouteStep['turnType'] }) {
@@ -56,43 +46,15 @@ export function WaymoRoutesModal() {
   const [destinationInput, setDestinationInput] = useState<string>('Green Library')
   const [searchQuery, setSearchQuery] = useState<string>('Green Library')
   const [activeRoute, setActiveRoute] = useState<MobilityRoute>(() => calculateDynamicRoute('Green Library'))
-  const [nearbyVehicles, setNearbyVehicles] = useState<WaymoVehicle[]>(() => getNearbyWaymos('Green Library'))
-  const [activeStepIndex, setActiveStepIndex] = useState<number>(0)
-  const [isPlaying, setIsPlaying] = useState<boolean>(false)
   const [isListeningVoice, setIsListeningVoice] = useState<boolean>(false)
-  const [speechSupported, setSpeechSupported] = useState<boolean>(true)
-
-  const isPlayingRef = useRef(isPlaying)
-  isPlayingRef.current = isPlaying
-
-  useEffect(() => {
-    if (!('speechSynthesis' in window)) {
-      setSpeechSupported(false)
-    }
-    return () => {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel()
-      }
-    }
-  }, [])
-
-  const stopAudio = () => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel()
-    }
-    setIsPlaying(false)
-  }
 
   const navigateToDestination = (destination: string) => {
-    stopAudio()
     const trimmed = destination.trim()
     if (!trimmed) return
     setDestinationInput(trimmed)
     setSearchQuery(trimmed)
     const newRoute = calculateDynamicRoute(trimmed)
     setActiveRoute(newRoute)
-    setNearbyVehicles(getNearbyWaymos(trimmed))
-    setActiveStepIndex(0)
   }
 
   const handleSearchSubmit = (e: FormEvent) => {
@@ -105,7 +67,7 @@ export function WaymoRoutesModal() {
       (window as unknown as { SpeechRecognition?: any; webkitSpeechRecognition?: any }).webkitSpeechRecognition
 
     if (!SpeechRecognition) {
-      alert('Voice input is not supported in this browser. Please type your destination.')
+      alert('Voice dictation is not supported in this browser. Please type your destination.')
       return
     }
 
@@ -142,96 +104,6 @@ export function WaymoRoutesModal() {
     }
   }
 
-  const speakStep = (route: MobilityRoute, stepIdx: number, autoAdvance = false) => {
-    if (!('speechSynthesis' in window)) return
-    window.speechSynthesis.cancel()
-
-    const step = route.steps[stepIdx]
-    if (!step) {
-      setIsPlaying(false)
-      return
-    }
-
-    const utterance = new SpeechSynthesisUtterance(step.audioText)
-    utterance.rate = 0.98
-    utterance.pitch = 1.0
-
-    const voices = window.speechSynthesis.getVoices()
-    const preferredVoice = voices.find(
-      v => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Siri') || v.name.includes('Samantha'))
-    )
-    if (preferredVoice) utterance.voice = preferredVoice
-
-    utterance.onstart = () => {
-      setIsPlaying(true)
-    }
-
-    utterance.onend = () => {
-      if (autoAdvance && isPlayingRef.current) {
-        if (stepIdx + 1 < route.steps.length) {
-          setActiveStepIndex(stepIdx + 1)
-          setTimeout(() => {
-            if (isPlayingRef.current) {
-              speakStep(route, stepIdx + 1, true)
-            }
-          }, 1200)
-        } else {
-          setIsPlaying(false)
-        }
-      } else {
-        setIsPlaying(false)
-      }
-    }
-
-    utterance.onerror = () => {
-      setIsPlaying(false)
-    }
-
-    window.speechSynthesis.speak(utterance)
-  }
-
-  const handleStartAll = () => {
-    if (isPlaying) {
-      stopAudio()
-    } else {
-      setIsPlaying(true)
-      speakStep(activeRoute, activeStepIndex, true)
-    }
-  }
-
-  const handlePlaySingle = (idx: number) => {
-    stopAudio()
-    setActiveStepIndex(idx)
-    setIsPlaying(true)
-    speakStep(activeRoute, idx, false)
-  }
-
-  const handleNext = () => {
-    if (activeStepIndex + 1 < activeRoute.steps.length) {
-      const nextIdx = activeStepIndex + 1
-      setActiveStepIndex(nextIdx)
-      if (isPlaying) {
-        speakStep(activeRoute, nextIdx, true)
-      }
-    }
-  }
-
-  const handlePrev = () => {
-    if (activeStepIndex > 0) {
-      const prevIdx = activeStepIndex - 1
-      setActiveStepIndex(prevIdx)
-      if (isPlaying) {
-        speakStep(activeRoute, prevIdx, true)
-      }
-    }
-  }
-
-  const handleRepeat = () => {
-    speakStep(activeRoute, activeStepIndex, isPlaying)
-  }
-
-  const currentStep = activeRoute.steps[activeStepIndex] || activeRoute.steps[0]
-
   return (
     <div className="help-content waymo-navigation-modal">
       {/* Search Header: "Where would you like to go?" */}
@@ -239,10 +111,10 @@ export function WaymoRoutesModal() {
         <div className="search-header-copy">
           <div className="search-badge">
             <Compass size={14} />
-            <span>Autonomous Waymo Mobility & Campus Routing</span>
+            <span>Campus Mobility & Walking Directions</span>
           </div>
           <h3>Where would you like to go?</h3>
-          <p>Input any campus building, dorm, or landmark for instant safe routing, spoken audio guidance, and nearby Waymos.</p>
+          <p>Input any campus building, dorm, or landmark to instantly calculate the walking route, elevation profile, crosswalks, and directions.</p>
         </div>
 
         <form onSubmit={handleSearchSubmit} className="destination-search-form">
@@ -278,7 +150,7 @@ export function WaymoRoutesModal() {
           </div>
           <button type="submit" className="search-submit-btn">
             <Navigation size={14} />
-            <span>Get Safe Route</span>
+            <span>Get Route</span>
           </button>
         </form>
 
@@ -304,51 +176,6 @@ export function WaymoRoutesModal() {
         </div>
       </section>
 
-      {/* Waymos Active Nearby Section */}
-      <section className="waymo-fleet-section" aria-label="Waymos nearby">
-        <div className="fleet-header">
-          <div className="fleet-title">
-            <span className="fleet-emblem">
-              <Car size={16} />
-            </span>
-            <div>
-              <h4>Waymos Active Nearby</h4>
-              <small>Autonomous vehicles operating on campus loops & nearby curbs</small>
-            </div>
-          </div>
-          <span className="fleet-count-badge">
-            <Sparkles size={12} /> {nearbyVehicles.length} Vehicles in Area
-          </span>
-        </div>
-
-        <div className="fleet-cards-grid">
-          {nearbyVehicles.map(vehicle => (
-            <div key={vehicle.id} className="waymo-vehicle-card">
-              <div className="vehicle-top-row">
-                <div className="vehicle-identity">
-                  <strong>{vehicle.vehicleModel}</strong>
-                  <span className="license-plate">{vehicle.licensePlate}</span>
-                </div>
-                <span className={`vehicle-status-badge status-${vehicle.status.toLowerCase().replace(/\s+/g, '-')}`}>
-                  {vehicle.status} · {vehicle.etaMinutes}m ETA
-                </span>
-              </div>
-              <div className="vehicle-beacon-row">
-                <div className="beacon-tag">
-                  <span className="beacon-led" style={{ backgroundColor: vehicle.beaconColor }} />
-                  <span>Roof Beacon: <strong>{vehicle.beaconInitial}</strong></span>
-                </div>
-                <span className="vehicle-bay">Bay: {vehicle.nearestBay}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="fleet-safety-tip">
-          <ShieldCheck size={14} />
-          <span><strong>Autonomous Boarding Protocol:</strong> Remain on sidewalk behind curb until vehicle completely stops. Verify rooftop beacon monogram before opening doors.</span>
-        </div>
-      </section>
-
       {/* Route Summary Banner */}
       <section className="waymo-route-banner">
         <div className="banner-title-row">
@@ -366,96 +193,14 @@ export function WaymoRoutesModal() {
         </div>
       </section>
 
-      {/* Spoken Turn-by-Turn Audio Navigation Player */}
-      <section className="waymo-audio-player">
-        <div className="player-header">
-          <div className="player-indicator">
-            <span className={`audio-pulse-dot ${isPlaying ? 'active' : ''}`} />
-            <div>
-              <strong>Spoken Turn-by-Turn Guidance</strong>
-              <small>
-                {isPlaying
-                  ? `Speaking Turn ${activeStepIndex + 1} of ${activeRoute.steps.length} aloud through speaker…`
-                  : speechSupported
-                  ? `Plays turn directions aloud through your device/phone speaker`
-                  : `Speech audio unavailable in this browser`}
-              </small>
-            </div>
-          </div>
-          <div className="player-controls">
-            <button
-              type="button"
-              className="player-btn control-btn"
-              onClick={handlePrev}
-              disabled={activeStepIndex === 0}
-              title="Previous Turn"
-            >
-              <SkipBack size={14} />
-            </button>
-            <button
-              type="button"
-              className={`player-btn play-btn ${isPlaying ? 'is-playing' : ''}`}
-              onClick={handleStartAll}
-              title={isPlaying ? 'Pause Voice Guidance' : 'Play All Turns Aloud'}
-            >
-              {isPlaying ? <Pause size={15} /> : <Play size={15} fill="currentColor" />}
-              <span>{isPlaying ? 'Pause' : 'Start Audio Guide'}</span>
-            </button>
-            <button
-              type="button"
-              className="player-btn control-btn"
-              onClick={handleNext}
-              disabled={activeStepIndex >= activeRoute.steps.length - 1}
-              title="Next Turn"
-            >
-              <SkipForward size={14} />
-            </button>
-            <button
-              type="button"
-              className="player-btn control-btn"
-              onClick={handleRepeat}
-              title="Repeat Current Turn"
-            >
-              <RotateCcw size={14} />
-            </button>
-          </div>
-        </div>
-
-        {/* Current Active Turn Spotlight Card */}
-        <div className="active-turn-spotlight">
-          <div className="spotlight-step-badge">
-            <span className="step-num">Step {currentStep.stepNumber} of {activeRoute.steps.length}</span>
-            <span className="step-dist">{currentStep.distance}</span>
-          </div>
-          <div className="spotlight-body">
-            <span className="spotlight-icon">
-              <StepIcon type={currentStep.turnType} />
-            </span>
-            <div className="spotlight-text">
-              <p className="instruction-text">{currentStep.instruction}</p>
-              {currentStep.safetyAlert && (
-                <div className="safety-alert-pill">
-                  <ShieldAlert size={13} />
-                  <span>{currentStep.safetyAlert}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Step-by-Step Turn List */}
+      {/* Step-by-Step Directions List */}
       <section className="waymo-steps-list">
-        <h4 className="steps-list-heading">Step-by-Step Walking Turns</h4>
-        {activeRoute.steps.map((step, idx) => {
-          const isActive = idx === activeStepIndex
+        <h4 className="steps-list-heading">Step-by-Step Directions</h4>
+        {activeRoute.steps.map((step) => {
           return (
             <div
               key={step.stepNumber}
-              className={`turn-step-card ${isActive ? 'is-active-step' : ''}`}
-              onClick={() => handlePlaySingle(idx)}
-              role="button"
-              tabIndex={0}
+              className="turn-step-card"
             >
               <div className="step-left">
                 <span className={`turn-icon-wrap ${step.turnType === 'arrive' ? 'arrive' : ''}`}>
@@ -475,21 +220,25 @@ export function WaymoRoutesModal() {
                   )}
                 </div>
               </div>
-              <button
-                type="button"
-                className="step-speaker-btn"
-                title="Speak this turn aloud"
-                onClick={e => {
-                  e.stopPropagation()
-                  handlePlaySingle(idx)
-                }}
-              >
-                {isActive && isPlaying ? <Volume2 size={15} className="speaking-anim" /> : <Volume2 size={15} />}
-              </button>
             </div>
           )
         })}
       </section>
+
+      {/* Route Safety Highlights */}
+      {activeRoute.routeHighlights.length > 0 && (
+        <section className="route-safety-section">
+          <h4 className="steps-list-heading">Safety & Route Notes</h4>
+          <ul className="route-highlights-list">
+            {activeRoute.routeHighlights.map((highlight, index) => (
+              <li key={index} className="route-highlight-item">
+                <ShieldCheck size={14} className="highlight-icon" />
+                <span>{highlight}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* Route Action Links */}
       <div className="waymo-modal-footer">
@@ -499,15 +248,15 @@ export function WaymoRoutesModal() {
           rel="noopener noreferrer"
           className="button-waymo-maps"
         >
-          <ExternalLink size={13} /> Open Dynamic Route in Google Maps
+          <ExternalLink size={13} /> Open Route in Google Maps
         </a>
       </div>
 
-      {/* Waymo Mobility Principles Note */}
+      {/* Mobility Principles Note */}
       <div className="help-local">
         <Route size={17} />
         <p>
-          <strong>Public Mobility & Autonomous Synergy:</strong> By combining real-time pedestrian crosswalk safety, ADA elevation profiles, and live autonomous Waymo loading bays, Clarity enables seamless, heads-up navigation without phone distraction.
+          <strong>Public Mobility:</strong> Utilizing open Google Maps routing, protected pedestrian crosswalks, and elevation data to ensure safe, accessible, and heads-up campus navigation.
         </p>
       </div>
     </div>
