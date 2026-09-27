@@ -6,7 +6,6 @@ import { AssistantPanel } from './components/AssistantPanel'
 import { AuthScreen } from './components/AuthScreen'
 import { useGeminiLive } from './hooks/useGeminiLive'
 import { VoicePanel } from './components/VoicePanel'
-import { AssistantGoal } from './components/AssistantGoal'
 import { VideoThumbnail } from './components/VideoThumbnail'
 import { useVoiceControl } from './hooks/useVoiceControl'
 import { useCamera } from './hooks/useCamera'
@@ -324,7 +323,6 @@ function Workspace({ user, accessToken, signOut }: { user: User; accessToken: st
     <div className="workspace">
       <header className="topbar compact-header"><div className="breadcrumb"><button className="icon-button mobile-menu" aria-label="Open navigation" disabled={driveModeActive} onClick={() => setSidebarOpen(true)}><Menu size={20} /></button><Glasses size={19} strokeWidth={1.5} /><span className="breadcrumb-slash">/</span><span className="dashboard-title"><strong>SmartGlasses</strong><span>{view} dashboard</span></span></div><div className="topbar-actions"><span className="local-indicator"><span className="status-dot" />Account synced</span><div className="avatar avatar-small">{accountInitial}</div><span className="today-date"><span className="date-number">{new Date().getDate()}</span><span className="date-description">{new Date().toLocaleDateString('en-US', { weekday: 'short' })},<br />{new Date().toLocaleDateString('en-US', { month: 'long' })}</span></span></div></header>
       <main className={`compact-page ${driveModeActive ? 'drive-mode-active' : ''}`}>
-        {!driveModeActive && (view === 'Overview' || view === 'Camera') && <AssistantGoal connected={isConnected} assistantActive={assistant.status !== 'off'} getVideo={() => previewRef.current?.querySelector('video') ?? null} />}
         {view === 'Overview' && <>
           <AssistantPanel assistant={assistant} accessToken={accessToken} voiceId={assistantVoiceId} setVoiceId={selectAssistantVoice} cameraConnected={isConnected} microphoneId={voice.microphoneId} setMicrophoneId={voice.setMicrophoneId} microphones={voice.microphones} refreshMicrophones={voice.refreshMicrophones} />
           <VoicePanel assistantActive={assistant.status !== 'off'} clipSeconds={isRecording && recordingKind.current === 'clip' ? Math.max(0, 15 - camera.elapsed) : null} />
