@@ -689,6 +689,37 @@ export function calculateCompassBearing(
   return { degrees: Math.round(brng), cardinal: cardinals[idx] }
 }
 
+export function calculateRelativeTurn(
+  deviceHeading: number,
+  targetBearing: number
+): {
+  relativeTurnDegrees: number
+  needleRotation: number
+  directionText: string
+  isFacingTarget: boolean
+} {
+  const diff = (targetBearing - deviceHeading + 360) % 360
+  const relativeTurnDegrees = diff > 180 ? diff - 360 : diff
+  const absTurn = Math.round(Math.abs(relativeTurnDegrees))
+  const isFacingTarget = absTurn <= 12
+
+  let directionText = 'Facing target (Walk straight ahead)'
+  if (!isFacingTarget) {
+    if (relativeTurnDegrees < 0) {
+      directionText = `Turn Left ${absTurn}°`
+    } else {
+      directionText = `Turn Right ${absTurn}°`
+    }
+  }
+
+  return {
+    relativeTurnDegrees,
+    needleRotation: diff,
+    directionText,
+    isFacingTarget,
+  }
+}
+
 export function getDestinationCoordinates(destinationName: string): Coordinates {
   const query = destinationName.trim().toLowerCase()
   const matched = POPULAR_CAMPUS_SPOTS.find(
