@@ -572,7 +572,7 @@ main.drive-mode-active .assistant-panel { margin: 20px auto; }
   font-size: 18px;
   font-weight: 650;
   color: #1a1a1a;
-  margin: 2px 0 3px;
+  margin: 0 0 4px;
   letter-spacing: -0.4px;
 }
 .statefarm-brand p {
@@ -782,7 +782,7 @@ main.drive-mode-active .assistant-panel { margin: 20px auto; }
   font-size: 18px;
   font-weight: 650;
   color: #0f172a;
-  margin: 2px 0 3px;
+  margin: 0 0 4px;
   letter-spacing: -0.4px;
 }
 .waymo-brand p {

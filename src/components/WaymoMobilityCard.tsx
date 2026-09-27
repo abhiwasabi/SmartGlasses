@@ -17,11 +17,7 @@ export function WaymoMobilityCard({ onOpenPickups, onOpenShield, onOpenRoutes, o
             <Compass size={24} strokeWidth={2} />
           </span>
           <div>
-            <div className="waymo-badge-row">
-              <span className="waymo-tag">WAYMO MOBILITY CHALLENGE</span>
-              <span className="waymo-tag-sub">SHELLHACKS 2026</span>
-            </div>
-            <h2>Autonomous Transit & Safe Route Co-Pilot</h2>
+            <h2>Waymo Transit & Safe Mobility Co-Pilot</h2>
             <p>Autonomous-grade pedestrian perception, designated safe curb pickup bays & Google Maps route intelligence.</p>
           </div>
         </div>

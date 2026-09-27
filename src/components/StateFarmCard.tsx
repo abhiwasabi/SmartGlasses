@@ -16,11 +16,7 @@ export function StateFarmCard({ onOpenChecklist, onOpenSafePark, onOpenClaims, c
             <ShieldAlert size={24} strokeWidth={2} />
           </span>
           <div>
-            <div className="statefarm-badge-row">
-              <span className="statefarm-tag">STATE FARM AUTO CHALLENGE</span>
-              <span className="statefarm-tag-sub">SHELLHACKS 2026</span>
-            </div>
-            <h2>Student Claims & Risk Co-Pilot</h2>
+            <h2>State Farm Claims & Risk Co-Pilot</h2>
             <p>Hands-free accident preparedness, evidence capture & everyday theft/hazard prevention for student drivers.</p>
           </div>
         </div>

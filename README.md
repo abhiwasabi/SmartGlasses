@@ -4,23 +4,19 @@ A React and TypeScript dashboard for the [SmartGlasses project](https://github.c
 
 ---
 
-### 🛡️ ShellHacks 2026 · State Farm Auto Insurance Challenge
-> **"Auto Insurance claims can be a lot and it helps to be prepared. Your goal is to create a hack that makes auto insurance simpler and helpful for students like you to reduce everyday risks (like theft, fire, or accidents) where they live, study, or travel."**
-
-Clarity transforms wearable smart glasses into an everyday **Auto Insurance & Student Risk Co-Pilot**:
+### 🛡️ State Farm Auto Insurance & Claims Co-Pilot
+Clarity transforms wearable smart glasses into an everyday **Auto Insurance & Driver Risk Co-Pilot**:
 - **Hands-Free Accident Claims Co-Pilot:** Spoken emergency guidance (*"I was in an accident"* or *"State Farm claim"*). Gemini Live calms driver panic, checks for injuries, prompts hazard lights, and visually records evidence (license plates, policy cards, vehicular damage) hands-free via the smart glasses cameras.
 - **Automated Claim Packet Generation:** Generates structured, timestamped loss reports in the dashboard tagged with `State Farm Claim`.
 - **1-Click State Farm Online Claim Filer:** The **"File on State Farm"** button copies all structured claim details to the clipboard and directly launches State Farm's official digital claims portal ([`reportloss.claims.statefarm.com/start-claim`](https://reportloss.claims.statefarm.com/start-claim)).
-- **SafePark™ Campus Theft & Risk Scanner:** Interactive protocol educating student drivers on campus break-in prevention (hiding valuables before arriving), parking garage safety, Comprehensive vs. Collision coverage, and discounts (**Good Student Discount**, **Drive Safe & Save™**).
+- **SafePark™ Vehicle Theft & Break-In Prevention:** Interactive protocol educating drivers on vehicle theft reduction (hiding valuables before arriving), parking garage safety, Comprehensive vs. Collision coverage, and insurance discounts (**Good Student Discount**, **Drive Safe & Save™**).
 - **Drive Mode Safety:** Hands-free claims co-pilot accessible while driving without touching the phone.
 
-### 🚗 ShellHacks 2026 · The Waymo Mobility Challenge
-> **"Waymo is an autonomous driving technology company with the mission to be the most trusted driver. With this mission in mind, we challenge you to use publicly available data to create a hack that improves transportation... directions, 360º street view, aerial view, elevation data... build the best transportation-related hack."**
-
-Clarity brings autonomous-grade perception and public mobility intelligence to everyday pedestrians, riders, and student drivers:
+### 🚗 Waymo Transit & Safe Mobility Navigation
+Clarity brings autonomous-grade perception and public mobility intelligence to everyday pedestrians, riders, and drivers:
 - **Waymo Autonomous Pickup Navigator:** Identifies designated safe curb loading zones on campus (avoiding bike lanes, fire lanes, and congested transit stops) with ADA ramp access, lighting ratings, and designated passenger cut-outs.
 - **Pedestrian Vision Shield:** Gemini Live audio-visual perception alerts pedestrians hands-free to crosswalk signals (Walk vs. Don't Walk), turning vehicles, and approaching micro-mobility.
-- **Campus Routes & Elevation Intelligence:** Integrates Google Maps walking directions, elevation profiles, and illuminated night corridors for low-risk campus navigation.
+- **Campus Routes & Elevation Intelligence:** Integrates Google Maps walking directions, elevation profiles, and illuminated night corridors for low-risk navigation.
 - **1-Click Google Maps Integration:** Direct launch into Google Maps from dashboard cards and voice-generated mobility notes.
 
 ---
