@@ -1,4 +1,4 @@
-export type VoiceAction = 'record' | 'stop-recording' | 'clip' | 'pause' | 'cancel-note' | null
+export type VoiceAction = 'record' | 'stop-recording' | 'pause' | 'cancel-note' | null
 export type VoiceState = { mode: 'commands' | 'dictating'; draft: string }
 export type VoiceResult = { state: VoiceState; action: VoiceAction; feedback: string; noteChanged?: boolean; noteComplete?: string }
 export const emptyVoiceState: VoiceState = { mode: 'commands', draft: '' }
@@ -7,7 +7,6 @@ function normalized(text: string) { return text.toLowerCase().replace(/[.,!?;:]+
 const exactCommands: Record<string, VoiceAction> = {
   'start recording': 'record',
   'stop recording': 'stop-recording', 'stop the recording': 'stop-recording', 'save recording': 'stop-recording',
-  'clip a memory': 'clip', 'clip this memory': 'clip', 'clip this': 'clip', 'clip that': 'clip',
   'stop listening': 'pause', 'pause listening': 'pause', 'pause voice': 'pause',
 }
 
@@ -39,5 +38,5 @@ export function interpretSpeech(state: VoiceState, transcript: string): VoiceRes
   }
   const action = exactCommands[command]
   if (action) return { state, action, feedback: action === 'pause' ? 'Microphone paused.' : 'Command received.' }
-  return { state, action: null, feedback: 'Try “start recording”, “make a new note”, or “clip a memory”.' }
+  return { state, action: null, feedback: 'Try “start recording” or “make a new note”.' }
 }

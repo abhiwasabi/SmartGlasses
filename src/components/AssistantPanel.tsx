@@ -65,6 +65,6 @@ export function AssistantPanel({ assistant, accessToken, voiceId, setVoiceId, ca
     {assistant.error && <p className="voice-error" role="alert">{assistant.error}</p>}
     {!driveMode && !!assistant.captions.length && <div ref={captionsRef} className="assistant-captions" aria-live="polite">{assistant.captions.map((caption, index) => <p key={index}><strong>{caption.role}</strong><span>{caption.text}</span></p>)}</div>}
     {!active && <p className="assistant-hint">{driveMode ? 'Voice only while driving. Use a forward-facing camera. Gemini receives microphone audio and camera frames during the session.' : 'Connect a camera, then ask “What am I looking at?” Audio and camera frames are sent to Gemini during the conversation. Keep this page open.'}</p>}
-    {active && !driveMode && <p className="assistant-hint">Try “start recording,” “clip a memory,” “make a new note,” or “take lecture notes.” Say “save note” for an organized summary, or “cancel note” to discard it.</p>}
+    {active && !driveMode && <p className="assistant-hint">Try “start recording,” “make a new note,” or “take lecture notes.” Say “save note” for an organized summary, or “cancel note” to discard it.</p>}
   </section>
 }

@@ -1,9 +1,8 @@
 import type { Schema, Tool } from '@google/genai'
 
 const captureTools: NonNullable<Tool['functionDeclarations']> = [
-  { name: 'start_recording', description: 'Start a longer video recording when the user says “start recording”.' },
+  { name: 'start_recording', description: 'Start video recording when the user says “start recording”.' },
   { name: 'stop_recording', description: 'Stop and save the current video recording when the user explicitly asks to stop.' },
-  { name: 'clip_memory', description: 'Save the previous 15 seconds from the camera buffer when the user explicitly asks to clip or save a memory.' },
 ]
 
 const noteTools: NonNullable<Tool['functionDeclarations']> = [

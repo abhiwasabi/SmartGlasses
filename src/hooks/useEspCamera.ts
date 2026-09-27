@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { saveRecording } from '../lib/storage';
-import { trimRecording } from '../lib/trimRecording';
 import type { CameraRecording, CameraStatus } from './useCamera';
-import type { PastClipResult } from './useCamera';
 
 interface EspRecordingSession {
   id: string;
@@ -99,12 +97,7 @@ export function useEspCamera(url: string, onRecorded: (recording: CameraRecordin
   const recordingTimerRef = useRef<number | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const sessionRef = useRef<EspRecordingSession | null>(null);
-  const preRollRecorderRef = useRef<MediaRecorder | null>(null);
-  const preRollChunksRef = useRef<Blob[]>([]);
-  const preRollStartedAtRef = useRef(0);
-  const preRollErrorRef = useRef('');
   const onRecordedRef = useRef(onRecorded);
-
   const videoRef = useCallback((video: HTMLVideoElement | null) => {
     const previousVideo = videoElementRef.current;
     if (previousVideo && previousVideo !== video) previousVideo.srcObject = null;
@@ -130,53 +123,7 @@ export function useEspCamera(url: string, onRecorded: (recording: CameraRecordin
     }
   }, []);
 
-  const stopPreRoll = useCallback((): Promise<void> => {
-    const recorder = preRollRecorderRef.current;
-    preRollRecorderRef.current = null;
-    preRollChunksRef.current = [];
-    preRollStartedAtRef.current = 0;
-    if (!recorder || recorder.state === 'inactive') return Promise.resolve();
-    return new Promise((resolve) => {
-      recorder.addEventListener('stop', () => resolve(), { once: true });
-      try { recorder.stop(); } catch { resolve(); }
-    });
-  }, []);
-
-  const startPreRoll = useCallback(async (source: MediaStream) => {
-    await stopPreRoll();
-    if (!source.getVideoTracks().some((track) => track.readyState === 'live')) return;
-    if (typeof MediaRecorder === 'undefined') {
-      preRollErrorRef.current = 'Past clips are not supported by this browser.';
-      return;
-    }
-    const mimeType = ['video/webm;codecs=vp8,opus', 'video/webm;codecs=vp8', 'video/webm']
-      .find((type) => MediaRecorder.isTypeSupported?.(type));
-    if (!mimeType) {
-      preRollErrorRef.current = 'Past clips need a browser with WebM recording support.';
-      return;
-    }
-    let recorder: MediaRecorder;
-    try { recorder = new MediaRecorder(source, { mimeType }); }
-    catch { preRollErrorRef.current = 'Past clips could not start. Reconnect the camera and try again.'; return; }
-    const handleData = (event: BlobEvent) => {
-      if (preRollRecorderRef.current !== recorder || !event.data.size) return;
-      preRollChunksRef.current.push(event.data);
-    };
-    recorder.addEventListener('dataavailable', handleData);
-    preRollRecorderRef.current = recorder;
-    preRollChunksRef.current = [];
-    preRollStartedAtRef.current = performance.now();
-    preRollErrorRef.current = '';
-    try { recorder.start(1000); }
-    catch {
-      recorder.removeEventListener('dataavailable', handleData);
-      preRollRecorderRef.current = null;
-      preRollErrorRef.current = 'Past clips could not start. Reconnect the camera and try again.';
-    }
-  }, [stopPreRoll]);
-
   const releaseCapture = useCallback(() => {
-    void stopPreRoll();
     connectionRef.current += 1;
     controllerRef.current?.abort();
     controllerRef.current = null;
@@ -188,7 +135,7 @@ export function useEspCamera(url: string, onRecorded: (recording: CameraRecordin
     streamRef.current = null;
     if (videoElementRef.current) videoElementRef.current.srcObject = null;
     if (mountedRef.current) setStream(null);
-  }, [stopPreRoll]);
+  }, []);
 
   const stopRecording = useCallback(() => {
     const recorder = recorderRef.current;
@@ -236,7 +183,6 @@ export function useEspCamera(url: string, onRecorded: (recording: CameraRecordin
       return;
     }
 
-    await stopPreRoll();
     releaseCapture();
     const connection = connectionRef.current;
     const controller = new AbortController();
@@ -252,7 +198,6 @@ export function useEspCamera(url: string, onRecorded: (recording: CameraRecordin
       streamRef.current = capturedStream;
       setStream(capturedStream);
       setElapsed(0);
-      await startPreRoll(capturedStream);
       if (!isCurrent()) return;
       transition('ready');
 
@@ -285,7 +230,7 @@ export function useEspCamera(url: string, onRecorded: (recording: CameraRecordin
       const detail = connectionError instanceof Error ? connectionError.message : 'The camera could not be reached.';
       setError(`Could not connect. ${detail}`);
     }
-  }, [disconnect, releaseCapture, startPreRoll, stopPreRoll, transition, url]);
+  }, [disconnect, releaseCapture, transition, url]);
 
   const startRecording = useCallback(async () => {
     if (statusRef.current !== 'ready' || !streamRef.current) return;
@@ -295,7 +240,6 @@ export function useEspCamera(url: string, onRecorded: (recording: CameraRecordin
       return;
     }
 
-    await stopPreRoll();
     if (statusRef.current !== 'ready' || streamRef.current !== currentStream) return;
 
     let recorder: MediaRecorder;
@@ -365,7 +309,6 @@ export function useEspCamera(url: string, onRecorded: (recording: CameraRecordin
           });
         }
       } finally {
-        if (streamRef.current) await startPreRoll(streamRef.current);
         transition(streamRef.current ? 'ready' : 'disconnected');
       }
     };
@@ -394,48 +337,7 @@ export function useEspCamera(url: string, onRecorded: (recording: CameraRecordin
       sessionRef.current = null;
       setError('Recording could not start. Reconnect the camera and try again.');
     }
-  }, [clearRecordingTimer, startPreRoll, stopPreRoll, stopRecording, transition]);
-
-  const clipPast15Seconds = useCallback(async (): Promise<PastClipResult> => {
-    const recorder = preRollRecorderRef.current;
-    if (statusRef.current !== 'ready' || !recorder || recorder.state !== 'recording') {
-      return { ok: false, message: preRollErrorRef.current || 'Connect the camera and let it buffer for 15 seconds before clipping a memory.' };
-    }
-    const bufferedFor = performance.now() - preRollStartedAtRef.current;
-    if (bufferedFor < 15_000) {
-      return { ok: false, message: `The memory buffer is still filling. Keep the camera connected for ${Math.ceil((15_000 - bufferedFor) / 1000)} more seconds, then try again.` };
-    }
-    transition('saving');
-    try {
-      await new Promise<void>((resolve) => {
-        const done = () => resolve();
-        recorder.addEventListener('stop', done, { once: true });
-        try { recorder.stop(); } catch { resolve(); }
-      });
-      if (preRollRecorderRef.current !== recorder) return { ok: false, message: 'The camera disconnected before the memory could be clipped.' };
-      preRollRecorderRef.current = null;
-      const sourceDuration = (performance.now() - preRollStartedAtRef.current) / 1000;
-      const rawBlob = new Blob(preRollChunksRef.current, { type: recorder.mimeType || 'video/webm' });
-      if (!rawBlob.size) return { ok: false, message: 'The recent camera footage could not be finalized. Reconnect the camera and try again.' };
-      const createdAt = new Date(Date.now() - 15_000).toISOString();
-      const blob = await trimRecording(rawBlob, sourceDuration, 15);
-      const duration = 15;
-      const playbackStart = 0;
-      const mediaDuration = duration;
-
-      const id = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `recording-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-      let persisted = false;
-      try { await saveRecording(id, blob); persisted = true; }
-      catch { if (mountedRef.current) setError('Browser storage could not save this memory. Download it before closing or refreshing.'); }
-      if (mountedRef.current) {
-        onRecordedRef.current({ id, title: `Memory clip · ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, createdAt, duration, mimeType: blob.type, size: blob.size, blob, persisted, playbackStart, mediaDuration });
-      }
-      return { ok: true, duration };
-    } finally {
-      if (streamRef.current) await startPreRoll(streamRef.current);
-      transition(streamRef.current ? 'ready' : 'disconnected');
-    }
-  }, [startPreRoll, transition]);
+  }, [clearRecordingTimer, stopRecording, transition]);
 
   useEffect(() => {
     const video = videoElementRef.current;
@@ -466,5 +368,5 @@ export function useEspCamera(url: string, onRecorded: (recording: CameraRecordin
 
   const clearError = useCallback(() => setError(null), []);
 
-  return { videoRef, status, error, elapsed, stream, connect, disconnect, startRecording, stopRecording, clipPast15Seconds, clearError };
+  return { videoRef, status, error, elapsed, stream, connect, disconnect, startRecording, stopRecording, clearError };
 }
