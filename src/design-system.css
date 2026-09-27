@@ -34,9 +34,12 @@ body { padding: 14px; }
 .device-state { border-radius: 20px; font-size: 8px; }
 .device-card button { border-color: var(--line); font-weight: 500; }
 .secondary-nav { font-size: 12px; }
-.sidebar-profile { border-color: var(--line); margin: 18px -18px 0; padding: 20px 18px; }
-.sidebar-profile strong { color: #222; font-size: 11px; }
+.sidebar-profile { border-color: var(--line); margin: 18px -18px 0; padding: 20px 18px; min-width: 0; overflow: hidden; }
+.sidebar-profile .profile-copy { flex: 1; min-width: 0; overflow: hidden; }
+.sidebar-profile strong { display: block; max-width: 100%; overflow: hidden; color: #222; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar-profile>div>span { color: #888; }
+.sidebar-profile .profile-copy>span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-local { flex-shrink: 0; }
 .avatar { background: #f4d7cf; color: #9f4936; border: 0; outline: 0; width: 40px; height: 40px; }
 .topbar { height: 112px; background: var(--surface); border: 0; padding: 0 36px; }
 .breadcrumb { gap: 16px; color: #111; }
