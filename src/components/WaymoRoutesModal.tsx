@@ -9,12 +9,15 @@ import {
   CornerUpLeft,
   CornerUpRight,
   ExternalLink,
+  Footprints,
   Locate,
   LocateFixed,
   MapPin,
   Mic,
   Navigation,
   Navigation2,
+  Pause,
+  Play,
   RotateCcw,
   RotateCw,
   Route,
@@ -78,16 +81,24 @@ export function WaymoRoutesModal() {
   const [activeRoute, setActiveRoute] = useState<MobilityRoute>(() => calculateDynamicRoute('Green Library'))
   const [isListeningVoice, setIsListeningVoice] = useState<boolean>(false)
 
-  const watchIdRef = useRef<number | null>(null)
+  // Motion & Walking State
+  const [stepsTaken, setStepsTaken] = useState<number>(0)
+  const [manualMetersWalked, setManualMetersWalked] = useState<number>(0)
+  const [isAutoWalking, setIsAutoWalking] = useState<boolean>(false)
+  const [gpsPingCount, setGpsPingCount] = useState<number>(0)
 
-  // Listen to mobile device compass orientation (gyro / magnetometer)
+  const watchIdRef = useRef<number | null>(null)
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const lastStepTimeRef = useRef<number>(0)
+
+  // 1. Listen to mobile device compass orientation (gyro / magnetometer)
   useEffect(() => {
     const handleOrientation = (e: DeviceOrientationEvent) => {
       const iosHeading = (e as any).webkitCompassHeading
       let heading: number | null = null
 
       if (typeof iosHeading === 'number' && !isNaN(iosHeading)) {
-        // iOS True North Heading (0° = North, 90° = East)
+        // iOS True North Heading
         heading = Math.round(iosHeading)
       } else if (e.alpha !== null && !isNaN(e.alpha)) {
         // Android Compass Heading
@@ -109,6 +120,75 @@ export function WaymoRoutesModal() {
     }
   }, [])
 
+  // 2. Real-Time Physical Step / Motion Detection (Accelerometer)
+  useEffect(() => {
+    const handleMotion = (e: DeviceMotionEvent) => {
+      const acc = e.accelerationIncludingGravity || e.acceleration
+      if (!acc) return
+
+      const total = Math.sqrt((acc.x || 0) ** 2 + (acc.y || 0) ** 2 + (acc.z || 0) ** 2)
+      const now = Date.now()
+
+      // Walking step rhythm detection: human step creates vertical acceleration spike
+      if (Math.abs(total - 9.8) > 1.6 && now - lastStepTimeRef.current > 380) {
+        lastStepTimeRef.current = now
+        setStepsTaken(prev => prev + 1)
+      }
+    }
+
+    window.addEventListener('devicemotion', handleMotion, true)
+    return () => {
+      window.removeEventListener('devicemotion', handleMotion, true)
+    }
+  }, [])
+
+  // 3. Auto-Walk Simulation Timer (decrements 1 meter per second when enabled)
+  useEffect(() => {
+    if (!isAutoWalking) return
+
+    const interval = setInterval(() => {
+      setManualMetersWalked(prev => prev + 1.2)
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [isAutoWalking])
+
+  // 4. High-Frequency GPS Polling Loop (polls GPS every 1.5s when active)
+  useEffect(() => {
+    if (locationStatus !== 'active') {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current)
+        pollIntervalRef.current = null
+      }
+      return
+    }
+
+    pollIntervalRef.current = setInterval(() => {
+      if ('geolocation' in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            setUserCoords({
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+              accuracy: pos.coords.accuracy,
+              heading: pos.coords.heading,
+            })
+            setGpsPingCount(c => c + 1)
+          },
+          () => {},
+          { enableHighAccuracy: true, timeout: 3500, maximumAge: 0 }
+        )
+      }
+    }, 1500)
+
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current)
+        pollIntervalRef.current = null
+      }
+    }
+  }, [locationStatus])
+
   // Cleanup GPS watcher on unmount
   useEffect(() => {
     return () => {
@@ -119,22 +199,28 @@ export function WaymoRoutesModal() {
     }
   }, [])
 
-  const requestCompassPermission = async () => {
+  const requestSensorsPermission = async () => {
+    // Request iOS orientation permission
     if (typeof (DeviceOrientationEvent as any)?.requestPermission === 'function') {
       try {
         const state = await (DeviceOrientationEvent as any).requestPermission()
-        if (state === 'granted') {
-          setHasCompassSensor(true)
-        }
+        if (state === 'granted') setHasCompassSensor(true)
       } catch (err) {
         console.warn('Compass permission rejected:', err)
+      }
+    }
+    // Request iOS motion permission
+    if (typeof (DeviceMotionEvent as any)?.requestPermission === 'function') {
+      try {
+        await (DeviceMotionEvent as any).requestPermission()
+      } catch (err) {
+        console.warn('Motion permission rejected:', err)
       }
     }
   }
 
   const toggleLocationServices = async () => {
-    // Request iOS compass permission on user gesture
-    await requestCompassPermission()
+    await requestSensorsPermission()
 
     if (locationStatus === 'active') {
       if (watchIdRef.current !== null && 'geolocation' in navigator) {
@@ -143,6 +229,9 @@ export function WaymoRoutesModal() {
       }
       setUserCoords(null)
       setLocationStatus('idle')
+      setStepsTaken(0)
+      setManualMetersWalked(0)
+      setIsAutoWalking(false)
       setActiveRoute(calculateDynamicRoute(destinationInput, null))
       return
     }
@@ -155,7 +244,7 @@ export function WaymoRoutesModal() {
     setLocationStatus('locating')
     setLocationError(null)
 
-    // 1. Get immediate position first
+    // Immediate initial snapshot
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const coords: UserLocation = {
@@ -166,6 +255,7 @@ export function WaymoRoutesModal() {
         }
         setUserCoords(coords)
         setLocationStatus('active')
+        setGpsPingCount(c => c + 1)
         setActiveRoute(calculateDynamicRoute(destinationInput, coords))
       },
       (err) => {
@@ -174,7 +264,7 @@ export function WaymoRoutesModal() {
       { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
     )
 
-    // 2. Start continuous GPS watcher
+    // Continuous watcher
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current)
     }
@@ -189,6 +279,7 @@ export function WaymoRoutesModal() {
         }
         setUserCoords(coords)
         setLocationStatus('active')
+        setGpsPingCount(c => c + 1)
         setActiveRoute(calculateDynamicRoute(destinationInput, coords))
       },
       (err) => {
@@ -204,6 +295,8 @@ export function WaymoRoutesModal() {
     if (!trimmed) return
     setDestinationInput(trimmed)
     setSearchQuery(trimmed)
+    setStepsTaken(0)
+    setManualMetersWalked(0)
     const effectiveCoords = useCampusDemoOrigin ? CAMPUS_CORE_COORDS : userCoords
     const newRoute = calculateDynamicRoute(trimmed, effectiveCoords)
     setActiveRoute(newRoute)
@@ -264,13 +357,19 @@ export function WaymoRoutesModal() {
   const destCoords = getDestinationCoordinates(activeRoute.destination)
   const activeOrigin = effectiveLocation || CAMPUS_CORE_COORDS
 
-  const liveDistMeters = calculateHaversineDistanceMeters(
+  // Base geographical distance
+  const baseDistMeters = calculateHaversineDistanceMeters(
     activeOrigin.lat,
     activeOrigin.lng,
     destCoords.lat,
     destCoords.lng
   )
-  const liveWalkingMins = Math.max(1, Math.round(liveDistMeters / 80))
+
+  // Deduct physical footsteps walked (average human stride = 0.76m) + manual steps
+  const totalMetersAdvanced = (stepsTaken * 0.76) + manualMetersWalked
+  const currentLiveDistMeters = Math.max(0, baseDistMeters - totalMetersAdvanced)
+
+  const liveWalkingMins = Math.max(1, Math.round(currentLiveDistMeters / 80))
   const targetBearing = calculateCompassBearing(
     activeOrigin.lat,
     activeOrigin.lng,
@@ -278,11 +377,22 @@ export function WaymoRoutesModal() {
     destCoords.lng
   )
   const relativeTurn = calculateRelativeTurn(deviceHeading, targetBearing.degrees)
-  const hasArrived = liveDistMeters < 25
+  const hasArrived = currentLiveDistMeters <= 5
 
-  // Manual rotation adjuster (for laptop testing without physical gyro)
+  // Manual rotation adjuster
   const rotateHeading = (delta: number) => {
     setDeviceHeading(prev => (prev + delta + 360) % 360)
+  }
+
+  // Manual walk step
+  const handleStepForward = () => {
+    setManualMetersWalked(prev => prev + 2)
+  }
+
+  const handleResetWalkProgress = () => {
+    setStepsTaken(0)
+    setManualMetersWalked(0)
+    setIsAutoWalking(false)
   }
 
   return (
@@ -368,8 +478,13 @@ export function WaymoRoutesModal() {
                   {useCampusDemoOrigin ? 'Campus Core Origin' : 'Live Phone GPS Active'}
                 </strong>
                 <span className="gps-accuracy-badge">
-                  {hasCompassSensor ? '🧭 Compass Sensor Active' : '📍 Position Active'}
+                  {hasCompassSensor ? '🧭 Compass Sensor Active' : '📍 GPS Active'}
                 </span>
+                {stepsTaken > 0 && (
+                  <span className="gps-accuracy-badge step-badge">
+                    <Footprints size={11} /> {stepsTaken} steps
+                  </span>
+                )}
               </div>
               <div className="location-header-actions">
                 <button
@@ -378,6 +493,8 @@ export function WaymoRoutesModal() {
                   onClick={() => {
                     const nextMode = !useCampusDemoOrigin
                     setUseCampusDemoOrigin(nextMode)
+                    setStepsTaken(0)
+                    setManualMetersWalked(0)
                     const nextCoords = nextMode ? CAMPUS_CORE_COORDS : userCoords
                     setActiveRoute(calculateDynamicRoute(destinationInput, nextCoords))
                   }}
@@ -433,20 +550,68 @@ export function WaymoRoutesModal() {
                 )}
 
                 <div className="live-stats-row">
-                  <span className="stat-pill highlight">
-                    📍 {Math.round(liveDistMeters)} meters remaining
+                  <span className="stat-pill highlight live-dist-pill">
+                    📍 {Math.round(currentLiveDistMeters)} meters remaining
                   </span>
                   <span className="stat-pill">
                     🚶 ~{liveWalkingMins} min walk
                   </span>
+                  {totalMetersAdvanced > 0 && (
+                    <span className="stat-pill walking-active-pill">
+                      🏃 -{Math.round(totalMetersAdvanced)}m walked
+                    </span>
+                  )}
                   <span className="stat-pill subtle">
-                    {activeOrigin.lat.toFixed(4)}, {activeOrigin.lng.toFixed(4)}
+                    {activeOrigin.lat.toFixed(4)}, {activeOrigin.lng.toFixed(4)}{gpsPingCount > 0 ? ` · ${gpsPingCount} pings` : ''}
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* Interactive Compass Testing Controls (Rotate Phone or Tap Buttons) */}
+            {/* Live Walking Motion & Walk Simulation Controls */}
+            <div className="live-walk-motion-bar">
+              <div className="walk-status-info">
+                <Footprints size={14} className={stepsTaken > 0 || isAutoWalking ? 'pulse-icon' : ''} />
+                <span>
+                  {stepsTaken > 0
+                    ? `Physical motion detected: ${stepsTaken} steps (~${(stepsTaken * 0.76).toFixed(1)}m)`
+                    : 'Walk with phone in hand or test motion with controls:'}
+                </span>
+              </div>
+              <div className="walk-action-buttons">
+                <button
+                  type="button"
+                  className="walk-btn"
+                  onClick={handleStepForward}
+                  title="Simulate taking 2 steps forward"
+                >
+                  <Footprints size={12} />
+                  <span>+2m Step</span>
+                </button>
+                <button
+                  type="button"
+                  className={`walk-btn auto-walk-btn ${isAutoWalking ? 'is-active' : ''}`}
+                  onClick={() => setIsAutoWalking(prev => !prev)}
+                  title={isAutoWalking ? 'Pause walk' : 'Continuously walk forward at 1.2 m/s'}
+                >
+                  {isAutoWalking ? <Pause size={12} /> : <Play size={12} />}
+                  <span>{isAutoWalking ? 'Pause' : 'Auto-Walk'}</span>
+                </button>
+                {totalMetersAdvanced > 0 && (
+                  <button
+                    type="button"
+                    className="walk-btn reset-btn"
+                    onClick={handleResetWalkProgress}
+                    title="Reset walked meters"
+                  >
+                    <RotateCcw size={11} />
+                    <span>Reset</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Compass Calibration Controls */}
             <div className="compass-calibration-bar">
               <span className="calibration-tip">
                 {hasCompassSensor
@@ -508,8 +673,10 @@ export function WaymoRoutesModal() {
                 className="campus-demo-btn"
                 onClick={() => {
                   setUseCampusDemoOrigin(true)
+                  setStepsTaken(0)
+                  setManualMetersWalked(0)
                   setActiveRoute(calculateDynamicRoute(destinationInput, CAMPUS_CORE_COORDS))
-                  requestCompassPermission()
+                  requestSensorsPermission()
                 }}
               >
                 <Compass size={14} />
@@ -600,7 +767,7 @@ export function WaymoRoutesModal() {
       <div className="help-local">
         <Route size={17} />
         <p>
-          <strong>Public Mobility & Location Services:</strong> Clarity integrates HTML5 DeviceOrientation magnetometer tracking and GPS Geolocation to dynamically compute real-time relative turns, heading, and distance countdown.
+          <strong>Public Mobility & Location Services:</strong> Clarity integrates continuous GPS polling and accelerometer motion detection with digital compass heading to dynamically decrement walking distance and provide real-time turn guidance.
         </p>
       </div>
     </div>
