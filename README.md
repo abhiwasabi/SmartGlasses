@@ -1,21 +1,33 @@
-# Clarity · SmartGlasses dashboard
+# Clarity · SmartGlasses Dashboard
 
 A React and TypeScript dashboard for the [SmartGlasses project](https://github.com/abhiwasabi/SmartGlasses). Capture camera footage and dictate notes through hands-free voice commands. Review saved content in the dashboard.
 
+---
+
+### 🛡️ ShellHacks 2026 · State Farm Auto Insurance Challenge
+> **"Auto Insurance claims can be a lot and it helps to be prepared. Your goal is to create a hack that makes auto insurance simpler and helpful for students like you to reduce everyday risks (like theft, fire, or accidents) where they live, study, or travel."**
+
+Clarity transforms wearable smart glasses into an everyday **Auto Insurance & Student Risk Co-Pilot**:
+- **Hands-Free Accident Claims Co-Pilot:** Spoken emergency guidance (*"I was in an accident"* or *"State Farm claim"*). Gemini Live calms driver panic, checks for injuries, prompts hazard lights, and visually records evidence (license plates, policy cards, vehicular damage) hands-free via the smart glasses cameras.
+- **Automated Claim Packet Generation:** Generates structured, timestamped loss reports in the dashboard tagged with `State Farm Claim`.
+- **1-Click State Farm Online Claim Filer:** The **"File on State Farm"** button copies all structured claim details to the clipboard and directly launches State Farm's official digital claims portal ([`reportloss.claims.statefarm.com/start-claim`](https://reportloss.claims.statefarm.com/start-claim)).
+- **SafePark™ Campus Theft & Risk Scanner:** Interactive protocol educating student drivers on campus break-in prevention (hiding valuables before arriving), parking garage safety, Comprehensive vs. Collision coverage, and discounts (**Good Student Discount**, **Drive Safe & Save™**).
+- **Drive Mode Safety:** Hands-free claims co-pilot accessible while driving without touching the phone.
+
+---
+
 ## Features
 
+- **State Farm Auto Insurance Co-Pilot:** Complete hands-free accident protocol, visual evidence capture, and online claim filing integration.
 - Camera preview and recording, with a choice of two configured ESP32-CAM devices or the phone/computer camera.
 - Recording playback and download, with saved recordings included in the memory library.
 - Voice-dictated reminders and lecture notes summarized into readable, titled notes when saved, with manual editing for corrections.
 - A microphone status panel, live transcript, command guide, and optional acknowledgement tones.
 - Drive Mode for brief spoken road-hazard and driving-coaching alerts from the selected camera.
-- Voice-triggered 15-second memory clips. The top memory search bar has been removed.
-- Events and memories organized by Everyday, Work, and Adventure.
 - Settings for the two ESP32-CAM addresses.
 - Email/password accounts with private, per-user notes and memory storage through Supabase.
 - An empty workspace that contains only notes, recordings, and events you create.
 - Gemini Live voice conversations about the current camera view.
-- Goal-based Gemini scene scans and detector-event alerts through the local Python receiver.
 
 ## Run locally
 
