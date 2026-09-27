@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Session, LiveServerMessage } from '@google/genai'
 import { encodePcm, decodePcm } from '../lib/liveAudio'
 import { DRIVE_MODE_TOOLS, LIVE_TOOLS } from '../lib/liveTools'
-import { WAYMO_PICKUP_ZONES, calculateDynamicRoute } from '../lib/waymoMobility'
 import type { AssistantMode } from '../lib/assistantMode'
 import { getValidAccessToken } from '../lib/supabase'
 
@@ -197,64 +196,6 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
 
             actionsRef.current.onNote(content, true, title, 'State Farm Claim')
             result = 'Clarity generated the State Farm auto insurance claim packet and saved it to dashboard notes.'
-            break
-          }
-          case 'find_safe_pickup_zone': {
-            const rawLoc = typeof call.args?.location === 'string' ? call.args.location.trim().toLowerCase() : ''
-            const zone = WAYMO_PICKUP_ZONES.find(z => z.name.toLowerCase().includes(rawLoc) || z.campusArea.toLowerCase().includes(rawLoc)) || WAYMO_PICKUP_ZONES[0]
-            const title = `Waymo Safe Pickup · ${zone.name}`
-            const content = [
-              `WAYMO SAFE AUTONOMOUS PICKUP ZONE`,
-              `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
-              `Designated Hub: ${zone.name}`,
-              `Campus Sector: ${zone.campusArea}`,
-              `Curb Specification: ${zone.curbType}`,
-              `ADA Accessibility: ${zone.adaAccessible ? 'Yes · Wheelchair ramp equipped' : 'Standard curb'}`,
-              `Lighting & Visibility: ${zone.lightingRating}`,
-              `Google Maps Location: ${zone.googleMapsUrl}`,
-              ``,
-              `AUTONOMOUS PICKUP BOARDING TIP`,
-              `${zone.tip}`,
-              ``,
-              `WAYMO MOBILITY SAFETY PROTOCOL`,
-              `• Remain on the pedestrian sidewalk behind the curb line until the autonomous vehicle comes to a complete stop.`,
-              `• Verify the vehicle passenger display name and vehicle license plate before unlocking doors.`,
-              `• Avoid standing in bike lanes, red curb fire lanes, or active shuttle lanes.`,
-            ].join('\n')
-
-            actionsRef.current.onNote(content, true, title, 'Waymo Mobility')
-            result = `Clarity located the safe Waymo pickup zone at ${zone.name} and saved it to dashboard notes with Google Maps link.`
-            break
-          }
-          case 'get_safe_mobility_route': {
-            const rawDest = typeof call.args?.destination === 'string' ? call.args.destination.trim() : ''
-            const route = calculateDynamicRoute(rawDest || 'Green Library')
-            const title = `Safe Route · ${route.destination}`
-            const stepsList = route.steps.map(s => `${s.stepNumber}. [${s.distance}] ${s.instruction}`).join('\n')
-            const content = [
-              `SAFE MOBILITY & PEDESTRIAN ROUTE`,
-              `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
-              `Destination: ${route.destination}`,
-              `Route Corridor: ${route.name}`,
-              `Distance: ${route.distance} · Walking ETA: ${route.walkingTime} (Scooter/Bike: ${route.bikeTime})`,
-              `Elevation Profile: ${route.elevationChange}`,
-              `Signalized Crosswalks: ${route.crosswalkCount} protected pedestrian crossing(s)`,
-              `Night Illumination Safety: ${route.nightSafety}`,
-              `Google Maps Directions: ${route.googleMapsUrl}`,
-              ``,
-              `STEP-BY-STEP DIRECTIONS`,
-              `${stepsList}`,
-              ``,
-              `PEDESTRIAN & MOBILITY SAFETY HIGHLIGHTS`,
-              ...route.routeHighlights.map(h => `• ${h}`),
-              ``,
-              `PEDESTRIAN SAFETY PROTOCOL`,
-              `• Keep head up and eyes alert at garage exits and service driveways.`,
-              `• Only enter crosswalks when the pedestrian signal actively displays Walk.`,
-            ].join('\n')
-
-            actionsRef.current.onNote(content, true, title, 'Waymo Mobility')
-            result = `Clarity calculated the route to ${route.destination} (${route.distance}, ${route.walkingTime} walk). Saved complete directions to dashboard notes with Google Maps link.`
             break
           }
           default:

@@ -37,33 +37,6 @@ const claimTools: NonNullable<Tool['functionDeclarations']> = [
   },
 ]
 
-const mobilityTools: NonNullable<Tool['functionDeclarations']> = [
-  {
-    name: 'find_safe_pickup_zone',
-    description: 'Clarity will find a designated safe autonomous vehicle curb pickup/drop-off zone or multi-modal transit hub on campus using Waymo mobility data.',
-    parameters: {
-      type: 'OBJECT' as Schema['type'],
-      properties: {
-        location: { type: 'STRING' as Schema['type'], description: 'Destination or landmark, e.g. Graham Center, Green Library, Engineering Center, Arena' },
-        preference: { type: 'STRING' as Schema['type'], description: 'Preference such as rain shelter, wheelchair accessible, or night lighting' },
-      },
-      required: ['location'],
-    },
-  },
-  {
-    name: 'get_safe_mobility_route',
-    description: 'Clarity will get a safe walking, scooter, or micro-mobility route with crosswalk alerts, lighting safety, and Google Maps data.',
-    parameters: {
-      type: 'OBJECT' as Schema['type'],
-      properties: {
-        destination: { type: 'STRING' as Schema['type'], description: 'Destination building or transit hub' },
-        mode: { type: 'STRING' as Schema['type'], description: 'Travel mode: walking, bike/scooter, or transit' },
-      },
-      required: ['destination'],
-    },
-  },
-]
-
-export const LIVE_TOOLS: Tool[] = [{ functionDeclarations: [...captureTools, ...noteTools, ...claimTools, ...mobilityTools] }]
-export const DRIVE_MODE_TOOLS: Tool[] = [{ functionDeclarations: [...captureTools, ...claimTools, ...mobilityTools] }]
+export const LIVE_TOOLS: Tool[] = [{ functionDeclarations: [...captureTools, ...noteTools, ...claimTools] }]
+export const DRIVE_MODE_TOOLS: Tool[] = [{ functionDeclarations: [...captureTools, ...claimTools] }]
 
