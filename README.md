@@ -6,7 +6,7 @@ A React and TypeScript dashboard for the [SmartGlasses project](https://github.c
 
 ### 🛡️ State Farm Auto Insurance & Claims Co-Pilot
 Clarity transforms wearable smart glasses into an everyday **Auto Insurance & Driver Risk Co-Pilot**:
-- **Hands-Free Accident Claims Co-Pilot:** Spoken emergency guidance (*"I was in an accident"* or *"State Farm claim"*). Gemini Live calms driver panic, checks for injuries, prompts hazard lights, and visually records evidence (license plates, policy cards, vehicular damage) hands-free via the smart glasses cameras.
+- **Hands-Free Accident Claims Co-Pilot:** Spoken emergency guidance (*"I was in an accident"* or *"State Farm claim"*). Clarity will calm driver panic, check for injuries, prompt hazard lights, and visually record evidence (license plates, policy cards, vehicular damage) hands-free via the smart glasses cameras.
 - **Automated Claim Packet Generation:** Generates structured, timestamped loss reports in the dashboard tagged with `State Farm Claim`.
 - **1-Click State Farm Online Claim Filer:** The **"File on State Farm"** button copies all structured claim details to the clipboard and directly launches State Farm's official digital claims portal ([`reportloss.claims.statefarm.com/start-claim`](https://reportloss.claims.statefarm.com/start-claim)).
 - **SafePark™ Vehicle Theft & Break-In Prevention:** Interactive protocol educating drivers on vehicle theft reduction (hiding valuables before arriving), parking garage safety, Comprehensive vs. Collision coverage, and insurance discounts (**Good Student Discount**, **Drive Safe & Save™**).
@@ -15,7 +15,7 @@ Clarity transforms wearable smart glasses into an everyday **Auto Insurance & Dr
 ### 🚗 Waymo Transit & Safe Mobility Navigation
 Clarity brings autonomous-grade perception and public mobility intelligence to everyday pedestrians, riders, and drivers:
 - **Waymo Autonomous Pickup Navigator:** Identifies designated safe curb loading zones on campus (avoiding bike lanes, fire lanes, and congested transit stops) with ADA ramp access, lighting ratings, and designated passenger cut-outs.
-- **Pedestrian Vision Shield:** Gemini Live audio-visual perception alerts pedestrians hands-free to crosswalk signals (Walk vs. Don't Walk), turning vehicles, and approaching micro-mobility.
+- **Pedestrian Vision Shield:** Clarity will alert pedestrians hands-free to crosswalk signals (Walk vs. Don't Walk), turning vehicles, and approaching micro-mobility through real-time audio-visual perception.
 - **Campus Routes & Elevation Intelligence:** Integrates Google Maps walking directions, elevation profiles, and illuminated night corridors for low-risk navigation.
 - **1-Click Google Maps Integration:** Direct launch into Google Maps from dashboard cards and voice-generated mobility notes.
 
@@ -33,7 +33,7 @@ Clarity brings autonomous-grade perception and public mobility intelligence to e
 - Settings for the two ESP32-CAM addresses.
 - Email/password accounts with private, per-user notes and memory storage through Supabase.
 - An empty workspace that contains only notes, recordings, and events you create.
-- Gemini Live voice conversations about the current camera view.
+- Clarity voice conversations about the current camera view.
 
 ## Run locally
 

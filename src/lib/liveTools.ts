@@ -1,13 +1,13 @@
 import type { Schema, Tool } from '@google/genai'
 
 const captureTools: NonNullable<Tool['functionDeclarations']> = [
-  { name: 'start_recording', description: 'Start video recording when the user says “start recording”.' },
-  { name: 'stop_recording', description: 'Stop and save the current video recording when the user explicitly asks to stop.' },
+  { name: 'start_recording', description: 'Clarity will start video recording when the user says “start recording”.' },
+  { name: 'stop_recording', description: 'Clarity will stop and save the current video recording when the user explicitly asks to stop.' },
 ]
 
 const noteTools: NonNullable<Tool['functionDeclarations']> = [
-  { name: 'start_note', description: 'Start capturing a spoken note, lecture, or class when the user asks to make a note or take notes.' },
-  { name: 'save_note', description: 'Summarize and save the current note when the user says save note or finish note. Return a concise title and useful organized plain-text content, preserving names, numbers, and important details.' , parameters: {
+  { name: 'start_note', description: 'Clarity will start capturing a spoken note, lecture, or class when the user asks to make a note or take notes.' },
+  { name: 'save_note', description: 'Clarity will summarize and save the current note when the user says save note or finish note. Return a concise title and useful organized plain-text content, preserving names, numbers, and important details.' , parameters: {
     type: 'OBJECT' as Schema['type'],
     properties: {
       title: { type: 'STRING' as Schema['type'], description: 'A short, descriptive title for the note.' },
@@ -15,13 +15,13 @@ const noteTools: NonNullable<Tool['functionDeclarations']> = [
     },
     required: ['title', 'content'],
   } },
-  { name: 'cancel_note', description: 'Discard the current voice note when the user asks to cancel or discard it.' },
+  { name: 'cancel_note', description: 'Clarity will discard the current voice note when the user asks to cancel or discard it.' },
 ]
 
 const claimTools: NonNullable<Tool['functionDeclarations']> = [
   {
     name: 'create_claim_packet',
-    description: 'Create an organized State Farm auto insurance incident claim packet when the user is in an accident, car crash, collision, or reports vehicle damage.',
+    description: 'Clarity will create an organized State Farm auto insurance incident claim packet when the user is in an accident, car crash, collision, or reports vehicle damage.',
     parameters: {
       type: 'OBJECT' as Schema['type'],
       properties: {
@@ -40,7 +40,7 @@ const claimTools: NonNullable<Tool['functionDeclarations']> = [
 const mobilityTools: NonNullable<Tool['functionDeclarations']> = [
   {
     name: 'find_safe_pickup_zone',
-    description: 'Find a designated safe autonomous vehicle curb pickup/drop-off zone or multi-modal transit hub on campus using Waymo mobility data.',
+    description: 'Clarity will find a designated safe autonomous vehicle curb pickup/drop-off zone or multi-modal transit hub on campus using Waymo mobility data.',
     parameters: {
       type: 'OBJECT' as Schema['type'],
       properties: {
@@ -52,7 +52,7 @@ const mobilityTools: NonNullable<Tool['functionDeclarations']> = [
   },
   {
     name: 'get_safe_mobility_route',
-    description: 'Get a safe walking, scooter, or micro-mobility route with crosswalk alerts, lighting safety, and Google Maps data.',
+    description: 'Clarity will get a safe walking, scooter, or micro-mobility route with crosswalk alerts, lighting safety, and Google Maps data.',
     parameters: {
       type: 'OBJECT' as Schema['type'],
       properties: {

@@ -134,7 +134,7 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
             transcriptBeforeTools = ''
             if (assistantNoteDraft) actionsRef.current.onNote(assistantNoteDraft, false)
             actionsRef.current.onNoteMode(true)
-            result = 'Note capture started. Confirm to the user. Keep collecting the spoken content and summarize it when the user asks to save.'
+            result = 'Note capture started. Clarity will keep collecting the spoken content and summarize it when the user asks to save.'
             break
           case 'save_note': {
             const transcript = finishNoteText(assistantNoteActive ? assistantNoteDraft : startNoteText(transcriptBeforeTools))
@@ -150,7 +150,7 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
             assistantNoteDraft = ''
             transcriptBeforeTools = ''
             actionsRef.current.onNoteMode(false)
-            result = 'The organized note summary was saved.'
+            result = 'Clarity saved the organized note summary.'
             break
           }
           case 'cancel_note':
@@ -159,7 +159,7 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
             assistantNoteDraft = ''
             transcriptBeforeTools = ''
             actionsRef.current.onNoteMode(false)
-            result = 'The note was discarded.'
+            result = 'Clarity discarded the note.'
             break
           case 'create_claim_packet': {
             const rawTitle = typeof call.args?.title === 'string' ? call.args.title.trim() : ''
@@ -195,7 +195,7 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
             ].join('\n')
 
             actionsRef.current.onNote(content, true, title, 'State Farm Claim')
-            result = 'State Farm auto insurance claim packet successfully generated and saved to dashboard notes.'
+            result = 'Clarity generated the State Farm auto insurance claim packet and saved it to dashboard notes.'
             break
           }
           case 'find_safe_pickup_zone': {
@@ -222,7 +222,7 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
             ].join('\n')
 
             actionsRef.current.onNote(content, true, title, 'Waymo Mobility')
-            result = `Located safe Waymo autonomous vehicle pickup zone at ${zone.name}. Saved to dashboard notes with Google Maps link.`
+            result = `Clarity located the safe Waymo pickup zone at ${zone.name} and saved it to dashboard notes with Google Maps link.`
             break
           }
           case 'get_safe_mobility_route': {
@@ -248,7 +248,7 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
             ].join('\n')
 
             actionsRef.current.onNote(content, true, title, 'Waymo Mobility')
-            result = `Calculated safe pedestrian route along ${route.name}. Saved to notes with Google Maps directions.`
+            result = `Clarity calculated the safe pedestrian route along ${route.name} and saved it to notes with Google Maps directions.`
             break
           }
           default:
@@ -401,7 +401,7 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
         tools: assistantMode === 'drive' ? DRIVE_MODE_TOOLS : LIVE_TOOLS,
       }, callbacks: {
         onmessage: onMessage,
-        onerror: () => fail('The Gemini connection failed. Check your internet connection and Live model access, then start again.'),
+        onerror: () => fail('The Clarity connection failed. Check your internet connection, then start again.'),
         onclose: () => fail('The assistant disconnected. Tap Start assistant to reconnect.'),
       } })
       if (!current()) { session.close(); return }

@@ -60,7 +60,7 @@ export function StateFarmCard({ onOpenChecklist, onOpenSafePark, onOpenClaims, c
       <div className="statefarm-hint">
         <ShieldCheck size={16} />
         <span>
-          <strong>Hands-Free Glasses Trigger:</strong> Say <em>“I had an accident”</em> or <em>“State Farm claim”</em> into your glasses. Gemini automatically calms you, captures the other driver’s license plate & insurance via camera, and compiles an organized claim packet.
+          <strong>Hands-Free Glasses Trigger:</strong> Say <em>“I had an accident”</em> or <em>“State Farm claim”</em> into your glasses. Clarity will automatically calm you, capture the other driver’s license plate & insurance via camera, and compile an organized claim packet.
         </span>
       </div>
     </section>

@@ -51,7 +51,7 @@ export function AssistantPanel({ assistant, accessToken, voiceId, setVoiceId, ca
 
   return <section className={`panel assistant-panel ${driveMode ? 'drive-assistant-panel' : ''}`} aria-label={driveMode ? 'Drive Mode assistant' : 'Visual AI assistant'}>
     <div className="assistant-heading">
-      <div className="panel-title"><span className="heading-icon">{driveMode ? <Car size={20} /> : <AudioLines size={20} />}</span><div><h2>{driveMode ? 'Drive Mode' : 'Ask your glasses'}</h2><p>{driveMode ? 'Brief spoken driving guidance from your selected camera.' : 'Talk with Gemini about what your camera sees.'}</p></div></div>
+      <div className="panel-title"><span className="heading-icon">{driveMode ? <Car size={20} /> : <AudioLines size={20} />}</span><div><h2>{driveMode ? 'Drive Mode' : 'Ask your glasses'}</h2><p>{driveMode ? 'Brief spoken driving guidance from your selected camera.' : 'Talk with Clarity about what your camera sees.'}</p></div></div>
       <button className={`button ${active ? 'button-secondary' : 'button-primary'}`} disabled={!active && driveMode && !cameraConnected} onClick={() => active ? assistant.stop() : void assistant.start(selectedMode)}>{active ? <Square size={15} /> : <Mic size={15} />}{active ? (driveMode ? 'End Drive Mode' : 'End conversation') : (driveMode ? 'Start Drive Mode' : 'Start assistant')}</button>
     </div>
     {!active && <div className="assistant-mode-picker" role="group" aria-label="Assistant mode">
@@ -64,7 +64,7 @@ export function AssistantPanel({ assistant, accessToken, voiceId, setVoiceId, ca
     {driveMode && !cameraConnected && !active && <p className="drive-camera-requirement">Connect the forward-facing camera in the Camera panel before starting Drive Mode.</p>}
     {assistant.error && <p className="voice-error" role="alert">{assistant.error}</p>}
     {!driveMode && !!assistant.captions.length && <div ref={captionsRef} className="assistant-captions" aria-live="polite">{assistant.captions.map((caption, index) => <p key={index}><strong>{caption.role}</strong><span>{caption.text}</span></p>)}</div>}
-    {!active && <p className="assistant-hint">{driveMode ? 'Voice only while driving. Forward camera required. In a collision or incident, say “I had an accident” for State Farm claims co-pilot.' : 'Connect a camera, then ask “What am I looking at?” Audio and camera frames are sent to Gemini during the conversation. Keep this page open.'}</p>}
+    {!active && <p className="assistant-hint">{driveMode ? 'Voice only while driving. Forward camera required. In a collision or incident, say “I had an accident” for State Farm claims co-pilot.' : 'Connect a camera, then ask “What am I looking at?” Audio and camera frames are sent to Clarity during the conversation. Keep this page open.'}</p>}
     {active && !driveMode && <p className="assistant-hint">Try “start recording,” “make a new note,” or say “I was in an accident” for State Farm claim co-pilot.</p>}
   </section>
 }

@@ -55,7 +55,7 @@ export function WaymoMobilityCard({ onOpenPickups, onOpenShield, onOpenRoutes, o
       <div className="waymo-hint">
         <ShieldCheck size={16} />
         <span>
-          <strong>Hands-Free Waymo Voice Trigger:</strong> Ask your glasses: <em>“Find safe Waymo pickup near Green Library”</em> or <em>“Safe walking route to Engineering Center.”</em> Gemini retrieves safe pickup bays, elevation grades, and Google Maps directions.
+          <strong>Hands-Free Waymo Voice Trigger:</strong> Ask your glasses: <em>“Find safe Waymo pickup near Green Library”</em> or <em>“Safe walking route to Engineering Center.”</em> Clarity will retrieve safe pickup bays, elevation grades, and Google Maps directions.
         </span>
       </div>
     </section>
