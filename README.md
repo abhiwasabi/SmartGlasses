@@ -13,6 +13,8 @@ A React and TypeScript dashboard for the [SmartGlasses project](https://github.c
 - Settings for the two ESP32-CAM addresses.
 - Email/password accounts with private, per-user notes and memory storage through Supabase.
 - An empty workspace that contains only notes, recordings, and events you create.
+- Gemini Live voice conversations about the current camera view.
+- Goal-based Gemini scene scans and detector-event alerts through the local Python receiver.
 
 ## Run locally
 
@@ -77,7 +79,7 @@ A clip uses the latest 15 seconds buffered while the camera is connected. Connec
 
 The frontend uses the [Web Speech API](https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition) with the selected microphone (or system default). This does not add an audio transport to the ESP32 camera firmware. A dedicated glasses microphone needs to be exposed as a browser audio input or integrated with a speech-to-text backend.
 
-Speech recognition is not supported by every browser or embedded preview. Chrome is a practical option; the app shows an explicit error when recognition or its service is unavailable. Some browsers send audio to their speech service and need internet access. This app has no custom transcription backend or API key requirement. Microphone listening does not start automatically on page load; a user gesture and permission are required, and a spoken “stop listening” command cannot re-enable a paused microphone. The initial enable step is manual.
+Speech recognition is not supported by every browser or embedded preview. Chrome is a practical option; the app shows an explicit error when recognition or its service is unavailable. Some browsers send audio to their speech service and need internet access. This browser command mode has no custom transcription backend or API key requirement; Gemini Live below has separate server settings. Microphone listening does not start automatically on page load; a user gesture and permission are required, and a spoken “stop listening” command cannot re-enable a paused microphone. The initial enable step is manual.
 
 ## Connect two ESP32-CAM devices
 
@@ -132,6 +134,103 @@ vite.config.ts       Vite configuration and local camera proxy
 ```
 
 
+---
+
+## Goal-based alerts and Python decision engine
+
+`handle_event(context, event, goal=None)` accepts a context, an observed event,
+and an optional natural-language goal. Gemini can decide whether to speak about
+events outside the fixed rule list. For example, a goal to discard a wrapper can
+make a newly detected trash bin relevant.
+
+```python
+from decision_engine import handle_event
+
+handle_event(
+    context="walking",
+    goal="throw away this wrapper",
+    event={
+        "type": "bin_visible",
+        "description": "Trash bin on the right",
+        "confidence": 0.95,
+    },
+)
+```
+
+Install dependencies with `python -m pip install -r requirements.txt`. Copy
+`.env.example` to `.env.local` and enter private API keys there. Both assistant
+modes use `GEMINI_API_KEY`; ElevenLabs uses `ELEVENLABS_API_KEY`. Run
+`python -m unittest -v test_gemini_integration.py` for offline checks, then run
+`python decision_engine.py` for the voice demo.
+
+Known high and critical alerts use the rule-based message immediately. Gemini
+handles other sufficiently confident events, including unknown types and goals.
+If Gemini is unavailable, known events use their rule-based message. Gemini
+receives the context, goal, and event fields you pass to `handle_event`.
+
+## Live event receiver
+
+The Overview dashboard has a **What are you trying to do?** form. Start the
+receiver on the same computer as the dashboard, then enter any activity and
+goal and click **Set goal**. The form saves both to `POST /api/session` and
+restores them from `GET /api/session` on reload. Clearing the goal keeps the
+rule-based safety alerts active.
+
+Connect an ESP32 or device camera in the dashboard, then click **Scan once**
+or **Start scanning**. Each scan downsizes one current frame to at most 640px
+and sends its JPEG bytes to `POST /api/frame` on the local receiver. Gemini
+looks for something clearly visible that helps the saved goal, such as a trash
+bin when the goal is to discard a wrapper. Its short answer enters the same
+spoken-alert cooldown as detector events. Continuous scanning waits five
+seconds after each request finishes before starting another; it stops when
+the camera disconnects or the goal changes. Camera frames leave this computer
+for Gemini only after you press a scan control. A single image cannot establish
+metric distance or closing speed, so scene alerts make neither claim. The
+existing `/api/events` path remains available for detector measurements.
+Goal-based scanning pauses during Gemini Live conversations so the two spoken
+assistants do not talk over each other.
+
+The dashboard form and scan controls currently work from a browser on the
+same computer as the receiver; on a phone, `127.0.0.1` points to the phone
+instead. A trusted backend proxy is needed for a phone or deployed dashboard.
+
+Run `python event_receiver.py` in the Shellhacks folder. It listens only on
+`http://127.0.0.1:8765`, so API keys stay in the local `.env`. The receiver
+accepts detected events from another process, applies the current activity and
+goal, and sends useful alerts to ElevenLabs. On Windows, if ElevenLabs is
+unavailable, the assistant speaks through the installed Windows voice instead.
+An ElevenLabs 401 disables retries until the receiver restarts. Check
+`GET /health` for readiness.
+On this Windows laptop, make mpv available in that terminal first if it is not
+already on `PATH`: `$env:Path = 'C:\Program Files\MPV Player;' + $env:Path`.
+
+Set the user's activity and goal from PowerShell:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8765/api/session -Method Post -ContentType 'application/json' -Body '{"context":"walking","goal":"throw away this wrapper"}'
+```
+
+Send an observation from a detector or a test process:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8765/api/events -Method Post -ContentType 'application/json' -Body '{"event":{"type":"bin_visible","description":"Trash bin on the right","direction":"right","confidence":0.95,"track_id":"bin-1"}}'
+```
+
+An event request can also include `context` or `goal` alongside `event` to
+override the saved session for that request. The response has `status` of
+`spoken`, `quiet`, or `suppressed`, plus the spoken `message` when applicable.
+Send stable `track_id` values for objects across frames. Repeats of the same
+object are suppressed for five seconds after an alert; a higher rule urgency or
+a substantial decrease in distance can trigger another alert sooner. Events
+that produced no speech can be reconsidered after one second. Changing the goal
+lets the same object be reconsidered immediately.
+
+The dashboard can now ask Gemini to interpret individual camera frames. It
+does not calculate distance or relative motion from those frames. A detector
+can send those measurements to `/api/events` for time-to-contact alerts. The
+receiver is a single-user local prototype and processes one request at a
+time. Run all offline checks with
+`python -m unittest -v test_gemini_integration.py test_live_integration.py test_scene_integration.py test_voice_fallback.py`.
 ## Gemini Live visual assistant
 
 The dashboard can stream microphone audio and the selected camera to Gemini Live,
@@ -140,18 +239,20 @@ single-session ephemeral token; the permanent Gemini key never reaches React.
 The token route runs with both `npm run dev` and `npm run preview`; a static-only
 hosting service cannot run this endpoint.
 
-1. The shared `.env` already contains the public Supabase browser configuration.
-   Keep server credentials in `.env.local`; that private file is never committed.
-2. Have the key owner enter `GEMINI_API_KEY` privately in `.env.local`. Never put it
-   in a `VITE_` variable, commit it, or paste it into chat.
-3. Configure `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`. Signed-in
-   account sessions protect token creation, including when using a public URL.
+1. The shared `.env` contains the public Supabase browser configuration. Copy
+   `.env.example` to `.env.local` for private settings; `.env.local` is ignored by
+   Git. The Python receiver also reads its Gemini and ElevenLabs keys from there.
+2. Have the key owner enter `GEMINI_API_KEY` in `.env.local`. Never put it in a
+   `VITE_` variable, commit it, or paste it into chat.
+3. Configure `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` for local
+   dashboard use. Signed-in account sessions protect token creation, including
+   when using a public URL.
 4. Set `GEMINI_LIVE_MODEL` to a Live model available to that Gemini project
    (the example uses `gemini-3.8-live`). A regular text-only model cannot be used.
 5. Restart Vite: `npm run dev -- --port 5174 --strictPort`.
 6. Sign in, connect an ESP32 or this device's camera, choose a microphone in
-   **Ask your glasses**, and tap **Start assistant**. Allow microphone
-   access. Ask “What am I looking at?”
+   **Ask your glasses**, and tap **Start assistant**. Allow microphone access.
+   Ask “What am I looking at?”
 
 For iPhone, open the HTTPS ngrok URL in Safari and keep the page in the foreground.
 Start assistant is a user gesture that enables Safari audio playback. Ending the
@@ -189,7 +290,7 @@ Never expose the permanent key in error reports.
 ### ElevenLabs reply voice
 
 To use ElevenLabs for the assistant's spoken replies, add both settings privately
-to `.env.local`, then restart Vite:
+to `.env`, then restart Vite:
 
 ```dotenv
 ELEVENLABS_API_KEY=your_private_elevenlabs_key
