@@ -4,6 +4,7 @@ import { encodePcm, decodePcm } from '../lib/liveAudio'
 import { DRIVE_MODE_TOOLS, LIVE_TOOLS } from '../lib/liveTools'
 import { WAYMO_PICKUP_ZONES, calculateDynamicRoute } from '../lib/waymoMobility'
 import type { AssistantMode } from '../lib/assistantMode'
+import { getValidAccessToken } from '../lib/supabase'
 
 type Status = 'off' | 'connecting' | 'listening' | 'speaking'
 type Caption = { role: 'You' | 'Assistant'; text: string }
@@ -270,11 +271,22 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
         const request = new AbortController()
         speechRequests.add(request)
         try {
-          const response = await fetch('/api/live/speech', {
+          const token = (await getValidAccessToken()) || accessToken
+          let response = await fetch('/api/live/speech', {
             method: 'POST', signal: request.signal,
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({ text, voiceId }),
           })
+          if (response.status === 401) {
+            const refreshed = await getValidAccessToken(true)
+            if (refreshed) {
+              response = await fetch('/api/live/speech', {
+                method: 'POST', signal: request.signal,
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${refreshed}` },
+                body: JSON.stringify({ text, voiceId }),
+              })
+            }
+          }
           if (!response.ok) {
             const data = await response.json() as { error?: string }
             throw new Error(data.error || 'ElevenLabs speech failed.')
@@ -385,7 +397,14 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
       if (!navigator.mediaDevices?.getUserMedia || !context.audioWorklet) throw new Error('Live audio needs a current browser on HTTPS or localhost.')
       // Resume immediately within the user's tap for Safari's audio permission.
       await context.resume()
-      const response = await fetch('/api/live/token', { method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'X-Assistant-Mode': assistantMode }, signal: tokenRequest.signal })
+      const validToken = (await getValidAccessToken()) || accessToken
+      let response = await fetch('/api/live/token', { method: 'POST', headers: { Authorization: `Bearer ${validToken}`, 'X-Assistant-Mode': assistantMode }, signal: tokenRequest.signal })
+      if (response.status === 401) {
+        const refreshedToken = await getValidAccessToken(true)
+        if (refreshedToken) {
+          response = await fetch('/api/live/token', { method: 'POST', headers: { Authorization: `Bearer ${refreshedToken}`, 'X-Assistant-Mode': assistantMode }, signal: tokenRequest.signal })
+        }
+      }
       const data = await response.json() as { error?: string; token?: string; model?: string; voiceProvider?: string }
       if (!response.ok || !data.token || !data.model) throw new Error(data.error || 'The assistant could not start.')
       elevenLabs = data.voiceProvider === 'elevenlabs'

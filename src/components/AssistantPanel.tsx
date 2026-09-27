@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AlertTriangle, AudioLines, Car, Mic, Square } from 'lucide-react'
 import type { useGeminiLive } from '../hooks/useGeminiLive'
 import type { AssistantMode } from '../lib/assistantMode'
+import { getValidAccessToken } from '../lib/supabase'
 
 type VoiceOption = { id: string; name: string }
 type Props = {
@@ -34,14 +35,27 @@ export function AssistantPanel({ assistant, accessToken, voiceId, setVoiceId, ca
   useEffect(() => {
     const controller = new AbortController()
     setVoicesLoading(true); setVoiceError('')
-    void fetch('/api/live/voices', { headers: { Authorization: `Bearer ${accessToken}` }, signal: controller.signal })
-      .then(async response => {
+    void (async () => {
+      try {
+        const token = (await getValidAccessToken()) || accessToken
+        let response = await fetch('/api/live/voices', { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal })
+        if (response.status === 401) {
+          const refreshed = await getValidAccessToken(true)
+          if (refreshed) {
+            response = await fetch('/api/live/voices', { headers: { Authorization: `Bearer ${refreshed}` }, signal: controller.signal })
+          }
+        }
         const data = await response.json() as { voices?: VoiceOption[]; defaultVoiceId?: string; error?: string }
         if (!response.ok) throw new Error(data.error || 'Assistant voices could not be loaded.')
-        setVoices(data.voices ?? []); setDefaultVoiceId(data.defaultVoiceId ?? '')
-      })
-      .catch(error => { if (!controller.signal.aborted) setVoiceError(error instanceof Error ? error.message : 'Assistant voices could not be loaded.') })
-      .finally(() => { if (!controller.signal.aborted) setVoicesLoading(false) })
+        if (!controller.signal.aborted) {
+          setVoices(data.voices ?? []); setDefaultVoiceId(data.defaultVoiceId ?? '')
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) setVoiceError(error instanceof Error ? error.message : 'Assistant voices could not be loaded.')
+      } finally {
+        if (!controller.signal.aborted) setVoicesLoading(false)
+      }
+    })()
     return () => controller.abort()
   }, [accessToken])
 
