@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Session, LiveServerMessage } from '@google/genai'
 import { encodePcm, decodePcm } from '../lib/liveAudio'
-import { LIVE_TOOLS } from '../lib/liveTools'
+import { DRIVE_MODE_TOOLS, LIVE_TOOLS } from '../lib/liveTools'
+import type { AssistantMode } from '../lib/assistantMode'
 
 type Status = 'off' | 'connecting' | 'listening' | 'speaking'
 type Caption = { role: 'You' | 'Assistant'; text: string }
@@ -16,6 +17,7 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
   const [error, setError] = useState('')
   const [captions, setCaptions] = useState<Caption[]>([])
   const [vision, setVision] = useState(false)
+  const [mode, setMode] = useState<AssistantMode>('general')
   const generation = useRef(0)
   const cleanup = useRef<(() => void) | null>(null)
   const camera = useRef(cameraStream)
@@ -32,10 +34,15 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
     setStatus('off'); setVision(false)
   }, [])
 
-  const start = useCallback(async () => {
+  const start = useCallback(async (assistantMode: AssistantMode = 'general') => {
     if (starting.current) return
+    if (assistantMode === 'drive' && !camera.current?.getVideoTracks().some(track => track.readyState === 'live')) {
+      setError('Connect the forward-facing camera before starting Drive Mode.')
+      return
+    }
     stop()
     beforeStart()
+    setMode(assistantMode)
     const run = ++generation.current
     starting.current = true
     setError(''); setCaptions([]); setStatus('connecting')
@@ -165,7 +172,7 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
           const response = await fetch('/api/live/speech', {
             method: 'POST', signal: request.signal,
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-            body: JSON.stringify({ text, ...(voiceId ? { voiceId } : {}) }),
+            body: JSON.stringify({ text, voiceId }),
           })
           if (!response.ok) {
             const data = await response.json() as { error?: string }
@@ -198,7 +205,7 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
       if (content?.interrupted) { clearSpeaker(); setStatus('listening') }
       if (content?.inputTranscription?.text) {
         if (elevenLabs && (speechRequests.size || speakers.size)) { clearSpeaker(); setStatus('listening') }
-        addCaption('You', content.inputTranscription.text)
+        if (assistantMode !== 'drive') addCaption('You', content.inputTranscription.text)
         if (assistantNoteActive) {
           const segment = finishNoteText(content.inputTranscription.text)
           if (segment) assistantNoteDraft = `${assistantNoteDraft}${assistantNoteDraft ? ' ' : ''}${segment}`.trim()
@@ -208,7 +215,7 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
       handleToolCalls(message)
       if (!content) return
       if (content.outputTranscription?.text) {
-        addCaption('Assistant', content.outputTranscription.text)
+        if (assistantMode !== 'drive') addCaption('Assistant', content.outputTranscription.text)
         if (elevenLabs && !content.interrupted) {
           replyText = (replyText + content.outputTranscription.text).slice(0, 4000)
           const firstSentence = replyText.match(/(.+?[.!?])(?:\s|$)/s)
@@ -247,7 +254,7 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
       if (!navigator.mediaDevices?.getUserMedia || !context.audioWorklet) throw new Error('Live audio needs a current browser on HTTPS or localhost.')
       // Resume immediately within the user's tap for Safari's audio permission.
       await context.resume()
-      const response = await fetch('/api/live/token', { method: 'POST', headers: { Authorization: `Bearer ${accessToken}` }, signal: tokenRequest.signal })
+      const response = await fetch('/api/live/token', { method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'X-Assistant-Mode': assistantMode }, signal: tokenRequest.signal })
       const data = await response.json() as { error?: string; token?: string; model?: string; voiceProvider?: string }
       if (!response.ok || !data.token || !data.model) throw new Error(data.error || 'The assistant could not start.')
       elevenLabs = data.voiceProvider === 'elevenlabs'
@@ -264,7 +271,8 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
       if (!current()) return
       const ai = new GoogleGenAI({ apiKey: data.token, httpOptions: { apiVersion: 'v1beta' } })
       session = await ai.live.connect({ model: data.model, config: {
-        responseModalities: [Modality.AUDIO], inputAudioTranscription: {}, outputAudioTranscription: {}, tools: LIVE_TOOLS,
+        responseModalities: [Modality.AUDIO], inputAudioTranscription: {}, outputAudioTranscription: {},
+        tools: assistantMode === 'drive' ? DRIVE_MODE_TOOLS : LIVE_TOOLS,
       }, callbacks: {
         onmessage: onMessage,
         onerror: () => fail('The Gemini connection failed. Check your internet connection and Live model access, then start again.'),
@@ -302,6 +310,9 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
       }
       sendFrame()
       frameTimer = window.setInterval(() => { try { sendFrame() } catch { fail('The camera context connection was interrupted. Start the assistant again.') } }, 1000)
+      if (assistantMode === 'drive') {
+        session.sendClientContent({ turns: [{ role: 'user', parts: [{ text: 'The driver has just activated Drive Mode. Give the short opening prompt from your instructions. Continue to monitor newly arriving camera frames and speak briefly only when a relevant driving hazard or control needs attention.' }] }], turnComplete: true })
+      }
       source = context.createMediaStreamSource(mic)
       capture = new AudioWorkletNode(context, 'live-audio-capture')
       capture.port.onmessage = event => {
@@ -317,12 +328,12 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
     } catch (reason) {
       fail(reason instanceof Error ? reason.message : 'The assistant could not start. Check microphone access and try again.')
     }
-  }, [accessToken, beforeStart, microphoneId, stop, voiceId])
+  }, [beforeStart, microphoneId, stop, accessToken, voiceId])
 
   useEffect(() => {
     const hidden = () => { if (document.hidden) stop() }
     document.addEventListener('visibilitychange', hidden)
     return () => { document.removeEventListener('visibilitychange', hidden); generation.current++; cleanup.current?.() }
   }, [stop])
-  return { status, error, captions, vision, start, stop }
+  return { status, error, captions, vision, mode, start, stop }
 }

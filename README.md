@@ -8,6 +8,7 @@ A React and TypeScript dashboard for the [SmartGlasses project](https://github.c
 - Recording playback and download, with saved recordings included in the memory library.
 - Voice-dictated reminders and lecture notes summarized into readable, titled notes when saved, with manual editing for corrections.
 - A microphone status panel, live transcript, command guide, and optional acknowledgement tones.
+- Drive Mode for brief spoken road-hazard and driving-coaching alerts from the selected camera.
 - Voice-triggered 15-second memory clips. The top memory search bar has been removed.
 - Events and memories organized by Everyday, Work, and Adventure.
 - Settings for the two ESP32-CAM addresses.
