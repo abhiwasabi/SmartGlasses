@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import type { User } from '@supabase/supabase-js'
-import { ArrowDownToLine, ArrowRight, ArrowUpRight, Bookmark, CalendarDays, Camera, Check, CheckCheck, CircleHelp, Clock3, CloudOff, Coffee, FileText, FolderOpen, Glasses, HardDrive, LayoutDashboard, Leaf, LoaderCircle, LogOut, Maximize2, Menu, Mountain, Plus, Radio, Search, Settings2, Square, Trash2, Video, Wifi, WifiOff, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowRight, ArrowUpRight, Bookmark, CalendarDays, Camera, Check, CheckCheck, CircleHelp, Clock3, CloudOff, Coffee, Copy, ExternalLink, FileText, FolderOpen, Glasses, HardDrive, LayoutDashboard, Leaf, LoaderCircle, LogOut, Maximize2, Menu, Mountain, Plus, Radio, Search, Settings2, ShieldAlert, Square, Trash2, Video, Wifi, WifiOff, X } from 'lucide-react'
 import { AssistantPanel } from './components/AssistantPanel'
 import { AuthScreen } from './components/AuthScreen'
 import { useGeminiLive } from './hooks/useGeminiLive'
 import { VoicePanel } from './components/VoicePanel'
+import { StateFarmCard } from './components/StateFarmCard'
 import { VideoThumbnail } from './components/VideoThumbnail'
 import { useVoiceControl } from './hooks/useVoiceControl'
 import { useCamera } from './hooks/useCamera'
@@ -72,7 +73,8 @@ function Workspace({ user, accessToken, signOut }: { user: User; accessToken: st
       ? 'browser'
       : 'camera1'
   )
-  const [modal, setModal] = useState<'settings' | 'help' | null>(null)
+  const [modal, setModal] = useState<'settings' | 'help' | 'accident-checklist' | 'safepark' | null>(null)
+  const stateFarmClaims = notes.filter(note => note.tag === 'State Farm Claim')
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null)
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null)
   const [recordingLoading, setRecordingLoading] = useState(false)
@@ -104,22 +106,42 @@ function Workspace({ user, accessToken, signOut }: { user: User; accessToken: st
   const accountInitial = accountName.charAt(0).toUpperCase()
   const [assistantVoiceId, setAssistantVoiceId] = useState(() => typeof user.user_metadata.assistant_voice_id === 'string' ? user.user_metadata.assistant_voice_id : '')
 
-  function saveVoiceNote(text: string, finished: boolean, suppliedTitle?: string) {
+  function saveVoiceNote(text: string, finished: boolean, suppliedTitle?: string, tag?: string) {
     if (!text.trim()) return
     const id = voiceNoteId.current ?? crypto.randomUUID()
     voiceNoteId.current = id
     const words = text.trim().split(/\s+/)
     const title = suppliedTitle?.slice(0, 120) || words.slice(0, 8).join(' ').slice(0, 90) + (words.length > 8 ? '…' : '')
-    const note: Note = { id, title, body: text.trim(), tag: 'Voice note', updatedAt: new Date().toISOString() }
+    const noteTag = tag || 'Voice note'
+    const note: Note = { id, title, body: text.trim(), tag: noteTag, updatedAt: new Date().toISOString() }
     setNotes(previous => previous.some(item => item.id === id) ? previous.map(item => item.id === id ? note : item) : [note, ...previous])
     setSelectedNoteId(id)
-    if (finished) { voiceNoteId.current = null; notify('Voice note saved.') }
+    if (finished) {
+      voiceNoteId.current = null
+      notify(noteTag === 'State Farm Claim' ? 'State Farm claim packet saved to your notes!' : 'Voice note saved.')
+    }
   }
   function cancelVoiceNote() {
     const id = voiceNoteId.current
     if (id) setNotes(previous => previous.filter(note => note.id !== id))
     voiceNoteId.current = null
     notify('Voice note discarded.')
+  }
+  function copyClaim(note: Note) {
+    if (!navigator.clipboard?.writeText) { notify('Clipboard access unavailable.'); return }
+    navigator.clipboard.writeText(`${note.title}\n\n${note.body}`)
+      .then(() => notify('State Farm claim packet copied to clipboard!'))
+      .catch(() => notify('Could not copy claim.'))
+  }
+  const STATE_FARM_CLAIM_URL = 'https://reportloss.claims.statefarm.com/start-claim'
+  function openOfficialFiler(note?: Note) {
+    if (note && navigator.clipboard?.writeText) {
+      void navigator.clipboard.writeText(`${note.title}\n\n${note.body}`)
+      notify('Claim copied to clipboard! Opening State Farm online claim filer…')
+    } else {
+      notify('Opening State Farm online claim filer…')
+    }
+    window.open(STATE_FARM_CLAIM_URL, '_blank', 'noopener,noreferrer')
   }
 
   async function selectAssistantVoice(voiceId: string) {
@@ -269,10 +291,20 @@ function Workspace({ user, accessToken, signOut }: { user: User; accessToken: st
 
   const noteEditor = <>
     {selectedNote ? <div className="note-editor">
-      <div className="note-date"><span>{dateLabel(selectedNote.updatedAt)} <span>·</span> {timeLabel(selectedNote.updatedAt)}</span><span className="tag tag-warm">{selectedNote.tag}</span></div>
+      <div className="note-date">
+        <span>{dateLabel(selectedNote.updatedAt)} <span>·</span> {timeLabel(selectedNote.updatedAt)}</span>
+        <span className={`tag ${selectedNote.tag === 'State Farm Claim' ? 'tag-statefarm' : 'tag-warm'}`}>
+          {selectedNote.tag === 'State Farm Claim' && <ShieldAlert size={12} />}
+          {selectedNote.tag}
+        </span>
+      </div>
       <input className="note-title" aria-label="Note title" maxLength={120} value={selectedNote.title} readOnly={voice.mode === 'dictating' && selectedNote.id === voiceNoteId.current} onChange={event => updateNote({ title: event.target.value })} placeholder="Give your thought a title" />
       <textarea className="note-body" aria-label="Note text" value={selectedNote.body} readOnly={voice.mode === 'dictating' && selectedNote.id === voiceNoteId.current} onChange={event => updateNote({ body: event.target.value })} placeholder="A thought, a detail, a little thing to remember…" />
-      <div className="note-editor-footer"><span>{storageError ? <><CloudOff size={13} /> Waiting to sync</> : <><CheckCheck size={14} /> Saved to your account</>}</span><span>{selectedNote.body.trim() ? selectedNote.body.trim().split(/\s+/).length : 0} words</span></div>
+      <div className="note-editor-footer">
+        <span>{storageError ? <><CloudOff size={13} /> Waiting to sync</> : <><CheckCheck size={14} /> Saved to your account</>}</span>
+        {selectedNote.tag === 'State Farm Claim' && <button type="button" className="button-claim-export" onClick={() => copyClaim(selectedNote)}><Copy size={12} /> Copy State Farm Claim</button>}
+        <span>{selectedNote.body.trim() ? selectedNote.body.trim().split(/\s+/).length : 0} words</span>
+      </div>
     </div> : <div className="empty-state"><FileText size={30} /><h3>Your notes will live here.</h3><p>Write a note from the Notes section, or ask Gemini to make one by voice.</p></div>}
   </>
   const cameraPanel = <section className="panel camera-panel">
@@ -304,13 +336,14 @@ function Workspace({ user, accessToken, signOut }: { user: User; accessToken: st
         {view === 'Overview' && <>
           <AssistantPanel assistant={assistant} accessToken={accessToken} voiceId={assistantVoiceId} setVoiceId={selectAssistantVoice} cameraConnected={isConnected} microphoneId={voice.microphoneId} setMicrophoneId={voice.setMicrophoneId} microphones={voice.microphones} refreshMicrophones={voice.refreshMicrophones} />
           <VoicePanel assistantActive={assistant.status !== 'off'} />
+          <StateFarmCard onOpenChecklist={() => setModal('accident-checklist')} onOpenSafePark={() => setModal('safepark')} onOpenClaims={() => { setNoteSearch('State Farm'); navigate('Notes') }} claimsCount={stateFarmClaims.length} />
         </>}
         {workspaceError && <div className="storage-error" role="alert"><CloudOff size={17} />{workspaceError}</div>}
         {view === 'Overview' && <>
           <div className="capture-grid">{cameraPanel}<section className="panel quick-notes"><div className="panel-heading"><div className="panel-title"><span className="heading-icon"><FileText size={18} /></span><div><h2>Notes</h2><p>Thoughts worth keeping.</p></div></div></div>{noteEditor}<button className="all-notes-link" onClick={() => navigate('Notes')}><span><FolderOpen size={14} />All notes <span className="small-count">{notes.length}</span></span><ArrowRight size={15} /></button></section></div>
         </>}
         {view === 'Camera' && <><div className="full-camera">{cameraPanel}</div><div className="camera-info"><Wifi size={19} /><div><h3>Two cameras. Your point of view.</h3><p>Add the Wi-Fi address of each ESP32-CAM in settings, then choose a camera above. Recordings sync privately to your account.</p></div><button className="button button-secondary" onClick={() => setModal('settings')}>Configure cameras <ArrowUpRight size={14} /></button></div></>}
-        {view === 'Notes' && <section className="panel notes-workspace"><div className="notes-list"><div className="notes-search"><Search size={15} /><input aria-label="Search notes" placeholder="Search your notes" value={noteSearch} onChange={e => setNoteSearch(e.target.value)} /></div><div className="notes-list-items">{notes.filter(note => `${note.title} ${note.body}`.toLowerCase().includes(noteSearch.toLowerCase())).map(note => <button key={note.id} className={`note-list-item ${selectedNote?.id === note.id ? 'selected' : ''}`} onClick={() => setSelectedNoteId(note.id)}><div><span className="tag">{note.tag}</span></div><h3>{note.title || 'Untitled note'}</h3><p>{note.body || 'Your next thought starts here…'}</p><span className="note-list-date">{dateLabel(note.updatedAt)} · {timeLabel(note.updatedAt)}</span></button>)}{!notes.some(note => `${note.title} ${note.body}`.toLowerCase().includes(noteSearch.toLowerCase())) && <p className="list-empty">No notes found. Try another search.</p>}</div><button className="new-note-list typed-note-link" onClick={addNote}><Plus size={13} /> Write a note</button></div><div className="full-note-editor"><div className="full-note-toolbar"><span><FileText size={15} /> Your notebook</span>{selectedNote && <button className="icon-button" aria-label="Delete selected note" disabled={voice.mode === 'dictating' && selectedNote?.id === voiceNoteId.current} onClick={() => { setNotes(previous => previous.filter(note => note.id !== selectedNote.id)); notify('Note deleted.') }}><Trash2 size={16} /></button>}</div>{noteEditor}</div></section>}
+        {view === 'Notes' && <section className="panel notes-workspace"><div className="notes-list"><div className="notes-search"><Search size={15} /><input aria-label="Search notes" placeholder="Search your notes" value={noteSearch} onChange={e => setNoteSearch(e.target.value)} /></div><div className="notes-list-items">{notes.filter(note => `${note.title} ${note.body}`.toLowerCase().includes(noteSearch.toLowerCase())).map(note => <button key={note.id} className={`note-list-item ${selectedNote?.id === note.id ? 'selected' : ''}`} onClick={() => setSelectedNoteId(note.id)}><div><span className={`tag ${note.tag === 'State Farm Claim' ? 'tag-statefarm' : ''}`}>{note.tag === 'State Farm Claim' && <ShieldAlert size={10} style={{ marginRight: 3 }} />}{note.tag}</span></div><h3>{note.title || 'Untitled note'}</h3><p>{note.body || 'Your next thought starts here…'}</p><span className="note-list-date">{dateLabel(note.updatedAt)} · {timeLabel(note.updatedAt)}</span></button>)}{!notes.some(note => `${note.title} ${note.body}`.toLowerCase().includes(noteSearch.toLowerCase())) && <p className="list-empty">No notes found. Try another search.</p>}</div><button className="new-note-list typed-note-link" onClick={addNote}><Plus size={13} /> Write a note</button></div><div className="full-note-editor"><div className="full-note-toolbar"><span><FileText size={15} /> Your notebook</span>{selectedNote && <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>{selectedNote.tag === 'State Farm Claim' && <><button type="button" className="button-claim-file" title="Copy claim packet and open State Farm official online claim filer" onClick={() => openOfficialFiler(selectedNote)}><ExternalLink size={12} /> File on State Farm</button><button type="button" className="button-claim-export" title="Copy claim packet to clipboard" onClick={() => copyClaim(selectedNote)}><Copy size={12} /> Copy Claim</button></>}<button className="icon-button" aria-label="Delete selected note" disabled={voice.mode === 'dictating' && selectedNote?.id === voiceNoteId.current} onClick={() => { setNotes(previous => previous.filter(note => note.id !== selectedNote.id)); notify('Note deleted.') }}><Trash2 size={16} /></button></div>}</div>{noteEditor}</div></section>}
         {(view === 'Overview' || view === 'Memories') && <section className="memories-section"><div className="section-heading"><div><h2>{view === 'Overview' ? 'Worth remembering' : 'Your memory collection'}<span className="small-count">{memories.length}</span></h2><p>{view === 'Overview' ? 'Small moments. A bigger picture.' : 'Find your way back to a moment.'}</p></div>{view === 'Overview' && <button className="text-button" onClick={() => navigate('Memories')}>View all memories <ArrowRight size={15} /></button>}{view === 'Memories' && <span className="collection-storage"><HardDrive size={14} />{formatBytes(memories.reduce((sum, memory) => sum + (memory.size ?? 0), 0))} in your account</span>}</div>{memories.length ? <div className="memory-grid">{(view === 'Overview' ? memories.slice(0, 3) : memories).map(memory => <MemoryCard key={memory.id} memory={memory} sessionBlob={sessionRecordings.current.get(memory.id)} onOpen={() => setSelectedMemory(memory)} />)}</div> : <div className="empty-state memory-empty"><Bookmark size={30} /><h3>Your next memory starts with your voice.</h3><p>Say “start recording” and “stop recording” to save a video.</p></div>}</section>}
         <footer className="page-footer"><span><Glasses size={16} />A little more present. A little more clarity.</span><span><CheckCheck size={12} />Private to {accountName}<span className="footer-dot">·</span>Built for the moments in between</span></footer>
       </main>
@@ -319,6 +352,8 @@ function Workspace({ user, accessToken, signOut }: { user: User; accessToken: st
     {toast && <div className="toast" role="status"><span className="toast-icon"><Check size={15} /></span>{toast}<button className="icon-button" aria-label="Dismiss notification" onClick={() => setToast('')}><X size={14} /></button></div>}
     {modal === 'settings' && <Modal title="Your camera setup" subtitle="Two perspectives. One place to remember them." onClose={() => setModal(null)}><form className="modal-form" onSubmit={saveSettings}><div className="settings-intro"><Wifi size={21} /><p>Connect your computer and both ESP32-CAM modules to the same Wi-Fi network. Enter each camera’s local address below.</p></div><label><span><Camera size={14} />Camera 01 · ESP32-CAM</span><input name="camera1" type="url" placeholder="http://192.168.1.100" defaultValue={settings.camera1} disabled={isBusy} /><small>The camera’s root address, without /stream or /capture.</small></label><label><span><Camera size={14} />Camera 02 · ESP32-CAM</span><input name="camera2" type="url" placeholder="http://192.168.1.101" defaultValue={settings.camera2} disabled={isBusy} /></label><div className="settings-note"><Radio size={16} /><p>Made for Espressif’s standard CameraWebServer firmware. Wi-Fi sends the footage; the serial adapters are used for device setup. ESP32 recordings are video-only.</p></div><div className="settings-note"><CheckCheck size={16} /><p>Notes and memories are private to {accountName} and sync through your Supabase project.</p></div>{isBusy && <p className="form-warning">Finish recording or connecting before changing camera settings.</p>}<div className="form-footer"><button type="button" className="button button-secondary" onClick={() => setModal(null)}>Cancel</button><button type="submit" className="button button-primary" disabled={isBusy}><Check size={15} />Save settings</button></div></form></Modal>}
     {modal === 'help' && <Modal title="A little help getting started" subtitle="Make room for what matters." onClose={() => setModal(null)}><div className="help-content"><div><span className="help-number">01</span><section><h3>Connect your perspective</h3><p>Configure your two ESP32-CAM addresses in Settings, choose Camera 01 or Camera 02, and connect. Use This device to try it with your phone or computer’s camera.</p></section></div><div><span className="help-number">02</span><section><h3>Keep a moment, hands-free</h3><p>In Ask your glasses, say “start recording” and “stop recording” to save a video.</p></section></div><div><span className="help-number">03</span><section><h3>Speak your notes</h3><p>In Ask your glasses, say “make a new note” for a reminder or “take lecture notes” during a class, then speak naturally. Say “save note” to get a titled, organized summary, or “cancel note” to discard it. Your draft is saved as you speak.</p></section></div><div className="help-local"><HardDrive size={17} /><p>Voice uses your browser’s default microphone and may send speech to its recognition service. Keep this page open. Clearing browser data removes saved notes and recordings. ESP32 connections need the local dashboard server running on the same network.</p></div></div></Modal>}
+    {modal === 'accident-checklist' && <Modal title="State Farm · Post-Accident Protocol" subtitle="Stay safe, calm, and prepared with your smart glasses." onClose={() => setModal(null)} wide><div className="help-content"><div><span className="help-number">01</span><section><h3>Safety First & Hazards On</h3><p>Check for injuries. If anyone needs emergency care, call <strong>911</strong> immediately. Turn on vehicle hazard flashers, and move to a safe sidewalk or shoulder away from oncoming traffic.</p></section></div><div><span className="help-number">02</span><section><h3>Hands-Free Visual Evidence</h3><p>Keep your glasses on and say: <em>“I was in an accident”</em> or <em>“Start recording.”</em> Your glasses record license plates, street names, vehicle damage, and skid marks hands-free without fumbling for your phone.</p></section></div><div><span className="help-number">03</span><section><h3>Exchange Information Calmly</h3><p>Look at the other driver's insurance card and driver's license—Gemini Live logs the details directly into your State Farm claim packet. <strong>Important:</strong> Do not admit fault or argue on-scene; let the evidence speak for itself.</p></section></div><div><span className="help-number">04</span><section><h3>1-Click State Farm Claim Submission</h3><p>Gemini automatically formats a timestamped <strong>State Farm Claim</strong> packet in your Notes. Head to Notes, tap <strong>File on State Farm</strong> to copy your claim and launch State Farm's official digital portal, or call <strong>1-800-SF-CLAIM (1-800-732-5246)</strong>.</p><a href={STATE_FARM_CLAIM_URL} target="_blank" rel="noopener noreferrer" className="button-claim-portal"><ExternalLink size={14} /> Open State Farm Online Claim Filer</a></section></div><div className="help-local"><ShieldAlert size={17} /><p><strong>Drive Safe & Save™ Tip:</strong> Smart evidence and proactive safety help expedite claim resolutions, prevent fraudulent counter-claims, and keep college student insurance rates low.</p></div></div></Modal>}
+    {modal === 'safepark' && <Modal title="State Farm · SafePark & Campus Risk Scanner" subtitle="Reduce theft, break-ins, and everyday campus auto risks." onClose={() => setModal(null)} wide><div className="help-content"><div><span className="help-number">01</span><section><h3>Valuables Out of Plain Sight (The #1 Campus Risk)</h3><p>Never leave backpacks, laptops, AirPods, or charging cables visible on seats. Opportunistic campus break-ins take under 20 seconds. Store gear in the trunk <em>before</em> arriving at your parking spot.</p></section></div><div><span className="help-number">02</span><section><h3>Smart Campus Parking Strategy</h3><p>Park near campus emergency call boxes, high-traffic pedestrian walkways, or directly under bright LED garage lighting. Avoid secluded corners and unmonitored perimeter gravel lots.</p></section></div><div><span className="help-number">03</span><section><h3>Student Auto Coverage Demystified</h3><p><strong>Comprehensive Coverage:</strong> Protects your vehicle against campus theft, shattered windows, vandalism, fallen tree branches, and flood damage.<br /><strong>Collision Coverage:</strong> Covers damage if your vehicle strikes another car, parking garage pillar, or barrier.</p></section></div><div><span className="help-number">04</span><section><h3>Student Discounts with State Farm</h3><p>Ask your State Farm agent about the <strong>Good Student Discount</strong> (up to 25% for a B average / 3.0 GPA), the <strong>Student Away at School</strong> discount, and the <strong>Drive Safe & Save™</strong> program to track safe driving habits.</p></section></div><div className="help-local"><HardDrive size={17} /><p><strong>Personal Property Note:</strong> Auto insurance covers vehicle damage, but personal property stolen from your car (like a laptop or backpack) is typically covered under renters insurance or a dorm policy.</p></div></div></Modal>}
     {selectedMemory && <Modal title={selectedMemory.title} subtitle={`${dateLabel(selectedMemory.createdAt)} at ${timeLabel(selectedMemory.createdAt)} · ${selectedMemory.category}`} onClose={() => setSelectedMemory(null)} wide><div className="memory-detail">{selectedMemory.kind === 'recording' ? <div className="recording-player">{recordingLoading ? <div className="player-message"><LoaderCircle className="spin" />Loading your moment…</div> : recordingError ? <div className="player-message"><Video size={28} /><p>{recordingError}</p></div> : recordingUrl && <video key={recordingUrl} controls playsInline src={recordingUrl} />}</div> : selectedMemory.image ? <img className="detail-image" src={selectedMemory.image} alt={selectedMemory.title} /> : <div className="detail-illustration"><Bookmark size={48} strokeWidth={1.2} /><span>A little moment. A lasting memory.</span></div>}<p className="detail-description">{selectedMemory.description || 'Sometimes a moment speaks for itself.'}</p>{selectedMemory.kind === 'recording' && <div className="recording-details"><span><Clock3 size={14} />{formatDuration(selectedMemory.duration ?? 0)}</span><span><HardDrive size={14} />{formatBytes(selectedMemory.size ?? 0)}</span></div>}<div className="detail-actions">{confirmDelete ? <div className="delete-confirm"><span>Delete this memory?</span><button className="button button-danger" disabled={deleting} onClick={() => void removeMemory()}>{deleting ? 'Deleting…' : 'Delete'}</button><button className="button button-secondary" onClick={() => setConfirmDelete(false)}>Keep it</button></div> : <button className="text-button delete-button" onClick={() => setConfirmDelete(true)}><Trash2 size={15} />Delete memory</button>}{recordingUrl && <a className="button button-primary" href={recordingUrl} download={`clarity-${selectedMemory.id}.${selectedMemory.mimeType?.includes('mp4') ? 'mp4' : 'webm'}`}><ArrowDownToLine size={15} />Download recording</a>}</div></div></Modal>}
   </div>
 }
