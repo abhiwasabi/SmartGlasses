@@ -8,7 +8,7 @@ type Status = 'off' | 'connecting' | 'listening' | 'speaking'
 type Caption = { role: 'You' | 'Assistant'; text: string }
 type LiveActions = {
   onCommand: (command: string) => Promise<string> | string
-  onNote: (text: string, finished: boolean, title?: string) => void
+  onNote: (text: string, finished: boolean, title?: string, tag?: string) => void
   onCancelNote: () => void
   onNoteMode: (active: boolean) => void
 }
@@ -160,6 +160,41 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
             actionsRef.current.onNoteMode(false)
             result = 'The note was discarded.'
             break
+          case 'create_claim_packet': {
+            const rawTitle = typeof call.args?.title === 'string' ? call.args.title.trim() : ''
+            const title = rawTitle || `State Farm Auto Claim · ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+            const otherParty = typeof call.args?.otherParty === 'string' && call.args.otherParty.trim() ? call.args.otherParty.trim() : 'To be collected / pending'
+            const licensePlate = typeof call.args?.licensePlate === 'string' && call.args.licensePlate.trim() ? call.args.licensePlate.trim() : 'Not identified in camera view'
+            const damageSummary = typeof call.args?.damageSummary === 'string' && call.args.damageSummary.trim() ? call.args.damageSummary.trim() : 'Damage reported'
+            const location = typeof call.args?.location === 'string' && call.args.location.trim() ? call.args.location.trim() : 'Incident location'
+            const narrative = typeof call.args?.narrative === 'string' && call.args.narrative.trim() ? call.args.narrative.trim() : 'Incident documented through smart glasses assistant.'
+
+            const content = [
+              `STATE FARM AUTO INCIDENT PACKET`,
+              `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+              `Timestamp: ${new Date().toLocaleString()}`,
+              `Location: ${location}`,
+              ``,
+              `VEHICLES & PARTIES INVOLVED`,
+              `• Other Driver / Policy: ${otherParty}`,
+              `• License Plate / State: ${licensePlate}`,
+              ``,
+              `DAMAGE & SCENE ASSESSMENT`,
+              `• Visual Damage: ${damageSummary}`,
+              ``,
+              `INCIDENT SUMMARY (FACTUAL)`,
+              `${narrative}`,
+              ``,
+              `STATE FARM CLAIMS PROTOCOL FOR STUDENTS`,
+              `1. Call State Farm 24/7 Claims at 1-800-SF-CLAIM (1-800-732-5246) or file in the State Farm app.`,
+              `2. Share this incident packet and your glasses recording timestamps with your adjuster.`,
+              `3. Exchange contact details with the other driver without discussing fault.`,
+            ].join('\n')
+
+            actionsRef.current.onNote(content, true, title, 'State Farm Claim')
+            result = 'State Farm auto insurance claim packet successfully generated and saved to dashboard notes.'
+            break
+          }
           default:
             result = 'Unknown action. Do not claim it was completed.'
         }
