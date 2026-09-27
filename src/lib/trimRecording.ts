@@ -2,8 +2,14 @@ import { repairWebmDuration } from './webmClip'
 
 /** Re-record a decoded interval, preserving audio and producing an independent video file. */
 export async function trimRecording(blob: Blob, mediaDuration: number, seconds = 15): Promise<Blob> {
+  const isWebm = blob.type.includes('webm')
   const video = document.createElement('video') as HTMLVideoElement & { captureStream?: () => MediaStream }
-  if (!video.captureStream) throw new Error('Memory trimming needs a browser with video capture support. Open Clarity in Chrome or Edge.')
+  const canTrim = typeof video.captureStream === 'function' && isWebm && typeof MediaRecorder !== 'undefined' && (MediaRecorder.isTypeSupported?.('video/webm') ?? false)
+  if (!canTrim) {
+    // On Safari / mobile, video.captureStream and WebM re-encoding are unsupported.
+    // Return the blob directly so the clip can be stored and played natively (e.g. as MP4).
+    return blob
+  }
   const source = await repairWebmDuration(blob, mediaDuration)
   const url = URL.createObjectURL(source)
   let stream: MediaStream | undefined
@@ -38,8 +44,8 @@ export async function trimRecording(blob: Blob, mediaDuration: number, seconds =
       video.currentTime = start
       await sought
     }
-    stream = video.captureStream()
-    if (!stream.getVideoTracks().length) throw new Error('The saved footage has no video track to trim.')
+    stream = video.captureStream?.()
+    if (!stream || !stream.getVideoTracks().length) return blob
     const mimeType = ['video/webm;codecs=vp8,opus', 'video/webm'].find(type => MediaRecorder.isTypeSupported(type))
     if (!mimeType) throw new Error('This browser cannot encode memory clips as WebM.')
     recorder = new MediaRecorder(stream, { mimeType })

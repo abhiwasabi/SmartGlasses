@@ -5,6 +5,9 @@ import { esp32CameraProxy } from './src/server/cameraProxy'
 
 export default defineConfig({
   plugins: [react(), esp32CameraProxy(), geminiLivePlugin()],
-  server: { host: '127.0.0.1' },
+  server: {
+    host: '127.0.0.1',
+    allowedHosts: true,
+  },
   preview: { host: '127.0.0.1' },
 })

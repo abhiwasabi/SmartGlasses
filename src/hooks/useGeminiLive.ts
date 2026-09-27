@@ -7,7 +7,7 @@ import type { AssistantMode } from '../lib/assistantMode'
 type Status = 'off' | 'connecting' | 'listening' | 'speaking'
 type Caption = { role: 'You' | 'Assistant'; text: string }
 type LiveActions = {
-  onCommand: (command: string) => string
+  onCommand: (command: string) => Promise<string> | string
   onNote: (text: string, finished: boolean, title?: string) => void
   onCancelNote: () => void
   onNoteMode: (active: boolean) => void
@@ -67,14 +67,20 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
     let speechGeneration = 0
     let speechQueue = Promise.resolve()
     const speechRequests = new Set<AbortController>()
+    let activeSpeechResolve: (() => void) | null = null
     let releaseDone = false
     const clearSpeaker = () => {
       speechGeneration++
       for (const request of speechRequests) request.abort()
       speechRequests.clear()
       replyText = ''
-      for (const node of speakers) { node.onended = null; try { node.stop() } catch { /* Already ended. */ } node.disconnect() }
+      for (const node of speakers) { node.onended = null; try { node.stop() } catch { /* Already ended. */ } try { node.disconnect() } catch {} }
       speakers.clear(); nextAudioTime = 0
+      if (activeSpeechResolve) {
+        activeSpeechResolve()
+        activeSpeechResolve = null
+      }
+      speechQueue = Promise.resolve()
     }
     const release = () => {
       if (releaseDone) return
@@ -111,16 +117,15 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
       .replace(/^\s*(?:(?:all\s+right|alright|okay|ok|sure|yes|hey)[,!.?\s]+)*(?:(?:can|could|would)\s+you\s+)?(?:i\s+want\s+to\s+)?(?:please\s+)?(?:take|start)\s+(?:some\s+)?(?:lecture\s+)?notes?\b[,:.!?\s]*/i, '')
       .replace(/\s+(?:save|finish)\s+(?:the\s+)?note[.!?]*\s*$/i, '').trim()
     const finishNoteText = (text: string) => text.replace(/\s+(?:save|finish)\s+(?:the\s+)?note[.!?]*\s*$/i, '').trim()
-    const handleToolCalls = (message: LiveServerMessage) => {
+    const handleToolCalls = async (message: LiveServerMessage) => {
       const calls = message.toolCall?.functionCalls
       if (!calls?.length || !session) return
-      const functionResponses = calls.map(call => {
+      const functionResponses = await Promise.all(calls.map(async call => {
         let result: string
         switch (call.name) {
           case 'start_recording':
           case 'stop_recording':
-          case 'clip_memory':
-            result = actionsRef.current.onCommand(call.name)
+            result = await actionsRef.current.onCommand(call.name)
             break
           case 'start_note':
             assistantNoteActive = true
@@ -159,7 +164,7 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
             result = 'Unknown action. Do not claim it was completed.'
         }
         return { id: call.id, name: call.name, response: { result } }
-      })
+      }))
       session.sendToolResponse({ functionResponses })
     }
     const speakReply = (text: string) => {
@@ -178,17 +183,42 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
             const data = await response.json() as { error?: string }
             throw new Error(data.error || 'ElevenLabs speech failed.')
           }
-          const audio = await context.decodeAudioData(await response.arrayBuffer())
+          const arrayBuffer = await response.arrayBuffer()
+          if (!current() || speechRun !== speechGeneration) return
+
+          // Ensure audio context is running on iOS Safari
+          if (context.state === 'suspended') {
+            await context.resume().catch(() => {})
+          }
+
+          const audio = await context.decodeAudioData(arrayBuffer)
           if (!current() || speechRun !== speechGeneration) return
           const node = context.createBufferSource()
           node.buffer = audio; node.connect(context.destination)
           speakers.add(node); setStatus('speaking')
-          node.onended = () => {
-            speakers.delete(node); node.disconnect()
-            if (current() && !speakers.size) setStatus('listening')
-          }
-          node.start()
-          await new Promise<void>(resolve => { node.addEventListener('ended', () => resolve(), { once: true }) })
+
+          await new Promise<void>(resolve => {
+            let done = false
+            let safetyTimer: ReturnType<typeof setTimeout> | undefined
+            const finish = () => {
+              if (done) return
+              done = true
+              if (safetyTimer) clearTimeout(safetyTimer)
+              if (activeSpeechResolve === finish) activeSpeechResolve = null
+              speakers.delete(node)
+              try { node.disconnect() } catch {}
+              if (current() && !speakers.size) setStatus('listening')
+              resolve()
+            }
+            activeSpeechResolve = finish
+            node.onended = finish
+            safetyTimer = setTimeout(finish, Math.ceil((audio.duration + 0.5) * 1000))
+            try {
+              node.start()
+            } catch {
+              finish()
+            }
+          })
         } catch (reason) {
           if (!current() || request.signal.aborted || speechRun !== speechGeneration) return
           setError(reason instanceof Error ? reason.message : 'ElevenLabs speech failed.')
@@ -196,6 +226,8 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
         } finally {
           speechRequests.delete(request)
         }
+      }).catch(() => {
+        speechQueue = Promise.resolve()
       })
     }
     const onMessage = (message: LiveServerMessage) => {
@@ -236,6 +268,9 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
       for (const part of content.modelTurn?.parts ?? []) {
         if (!part.inlineData?.data || !part.inlineData.mimeType?.startsWith('audio/pcm')) continue
         try {
+          if (context.state === 'suspended') {
+            void context.resume().catch(() => {})
+          }
           const samples = decodePcm(part.inlineData.data)
           const buffer = context.createBuffer(1, samples.length, 24000)
           buffer.copyToChannel(new Float32Array(samples), 0)
@@ -313,11 +348,17 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
       if (assistantMode === 'drive') {
         session.sendClientContent({ turns: [{ role: 'user', parts: [{ text: 'The driver has just activated Drive Mode. Give the short opening prompt from your instructions. Continue to monitor newly arriving camera frames and speak briefly only when a relevant driving hazard or control needs attention.' }] }], turnComplete: true })
       }
+      context.onstatechange = () => {
+        if (context.state === 'suspended' && current()) {
+          void context.resume().catch(() => {})
+        }
+      }
       source = context.createMediaStreamSource(mic)
       capture = new AudioWorkletNode(context, 'live-audio-capture')
       capture.port.onmessage = event => {
         if (!current() || !session) return
-        try { session.sendRealtimeInput({ audio: { data: encodePcm(event.data as Float32Array), mimeType: `audio/pcm;rate=${context.sampleRate}` } }) }
+        if (speakers.size > 0) return
+        try { session.sendRealtimeInput({ audio: { data: encodePcm(event.data as Float32Array), mimeType: 'audio/pcm;rate=16000' } }) }
         catch { fail('The microphone stream was interrupted. Start the assistant again.') }
       }
       source.connect(capture); capture.connect(context.destination)
