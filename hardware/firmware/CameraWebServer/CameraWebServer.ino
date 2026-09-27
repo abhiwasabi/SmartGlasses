@@ -32,7 +32,23 @@ static int lastRawButtonState = LOW;
 
 static esp_err_t indexHandler(httpd_req_t *request) {
   httpd_resp_set_type(request, "text/plain; charset=utf-8");
-  return httpd_resp_sendstr(request, "LaneTalk camera ready. MJPEG stream: /stream\n");
+  return httpd_resp_sendstr(request, "LaneTalk camera ready. Snapshot: /capture; MJPEG stream: /stream\n");
+}
+
+static esp_err_t captureHandler(httpd_req_t *request) {
+  camera_fb_t *frame = esp_camera_fb_get();
+  if (frame == nullptr) {
+    Serial.println("[camera] Snapshot capture failed");
+    httpd_resp_send_500(request);
+    return ESP_FAIL;
+  }
+
+  httpd_resp_set_type(request, "image/jpeg");
+  httpd_resp_set_hdr(request, "Cache-Control", "no-store");
+  const esp_err_t result = httpd_resp_send(
+      request, reinterpret_cast<const char *>(frame->buf), frame->len);
+  esp_camera_fb_return(frame);
+  return result;
 }
 
 static esp_err_t streamHandler(httpd_req_t *request) {
@@ -74,7 +90,7 @@ static esp_err_t streamHandler(httpd_req_t *request) {
 
 static bool startCameraServer() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-  config.max_uri_handlers = 2;
+  config.max_uri_handlers = 3;
 
   esp_err_t result = httpd_start(&cameraServer, &config);
   if (result != ESP_OK) {
@@ -92,9 +108,17 @@ static bool startCameraServer() {
   streamUri.method = HTTP_GET;
   streamUri.handler = streamHandler;
 
+  httpd_uri_t captureUri = {};
+  captureUri.uri = "/capture";
+  captureUri.method = HTTP_GET;
+  captureUri.handler = captureHandler;
+
   result = httpd_register_uri_handler(cameraServer, &indexUri);
   if (result == ESP_OK) {
     result = httpd_register_uri_handler(cameraServer, &streamUri);
+  }
+  if (result == ESP_OK) {
+    result = httpd_register_uri_handler(cameraServer, &captureUri);
   }
   if (result != ESP_OK) {
     Serial.printf("[http] Route registration failed: %s (0x%x)\n", esp_err_to_name(result), result);

@@ -1,7 +1,7 @@
 # Clarity hardware companion
 
 Imported from [work-yugtilva/shellhacks-hardware](https://github.com/work-yugtilva/shellhacks-hardware) at commit `7cb9252b64c9070172b222260504aacbf40e3853`.
-The original firmware, Python companion, tests, and YOLO model are preserved unchanged. See [the upstream README](UPSTREAM_README.md).
+The Python companion, tests, and YOLO model are preserved unchanged. The firmware adds a `/capture` snapshot route needed by Clarity alongside the original `/stream` route. See [the upstream README](UPSTREAM_README.md) for the original setup details.
 
 ## Contents
 
@@ -32,7 +32,7 @@ hardware/laptop/.venv/bin/python -m unittest discover -s hardware/laptop/tests
 
 This addition does not change the frontend, backend, npm dependencies, account setup, or existing camera connection.
 
-The imported firmware serves `/stream` but does not provide `/capture`. Clarity's existing web camera proxy requires `/capture`, so this firmware is not yet a drop-in replacement for the firmware used by the web app. Keep the working firmware on your board until a snapshot endpoint or stream adapter is implemented and tested.
+The firmware provides `/capture` for Clarity's existing web camera proxy as well as `/stream` for the Python companion. The web app settings should use the camera base URL (for this access point, `http://192.168.4.1`). Reflash the updated sketch in `firmware/CameraWebServer/CameraWebServer.ino` before connecting it to Clarity.
 
 The Python companion runs independently; its detections and button logs are not connected to Clarity's web assistant. Firmware compilation and physical-board behavior have not been verified as part of this import.
 

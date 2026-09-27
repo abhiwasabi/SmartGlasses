@@ -1,6 +1,6 @@
 # LaneTalk ESP32-CAM stream
 
-Minimal Arduino firmware for an AI-Thinker ESP32-CAM with an OV2640 camera. It starts a Wi-Fi access point, prints its IP address at 115200 baud, and serves a multipart MJPEG stream at `/stream`.
+Firmware for an AI-Thinker ESP32-CAM with an OV2640 camera. It starts a Wi-Fi access point, prints its IP address at 115200 baud, serves single JPEG snapshots at `/capture`, and serves a multipart MJPEG stream at `/stream`.
 
 ## Camera access point credentials
 
@@ -59,7 +59,7 @@ After flashing, remove the GPIO0-to-GND jumper, reset the board, and wait for th
 http://<ESP32-CAM-IP>/stream
 ```
 
-The browser should show the live camera feed. `http://<ESP32-CAM-IP>/` returns a short status line naming `/stream`. This is an unauthenticated local-network stream; keep it on a trusted network.
+The browser should show the live camera feed. Clarity's ESP32 proxy uses the camera base address (for example `http://192.168.4.1`) and fetches a still JPEG from `/capture`; verify that endpoint directly at `http://<ESP32-CAM-IP>/capture`. `http://<ESP32-CAM-IP>/` returns a short status line naming both endpoints. This is an unauthenticated local-network camera; keep it on a trusted network.
 
 ## Next laptop-side step
 
