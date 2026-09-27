@@ -5,6 +5,7 @@ import { DRIVE_MODE_TOOLS, LIVE_TOOLS } from '../lib/liveTools'
 import type { AssistantMode } from '../lib/assistantMode'
 import { getValidAccessToken } from '../lib/supabase'
 import { openMicrophone, microphoneErrorMessage } from '../lib/microphone'
+import { apiUrl } from '../lib/api'
 
 type Status = 'off' | 'connecting' | 'listening' | 'speaking'
 type Caption = { role: 'You' | 'Assistant'; text: string }
@@ -215,7 +216,7 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
         speechRequests.add(request)
         try {
           const token = (await getValidAccessToken()) || accessToken
-          let response = await fetch('/api/live/speech', {
+          let response = await fetch(apiUrl('/api/live/speech'), {
             method: 'POST', signal: request.signal,
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({ text, voiceId }),
@@ -223,7 +224,7 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
           if (response.status === 401) {
             const refreshed = await getValidAccessToken(true)
             if (refreshed) {
-              response = await fetch('/api/live/speech', {
+              response = await fetch(apiUrl('/api/live/speech'), {
                 method: 'POST', signal: request.signal,
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${refreshed}` },
                 body: JSON.stringify({ text, voiceId }),
@@ -341,11 +342,11 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
       // Resume immediately within the user's tap for Safari's audio permission.
       await context.resume()
       const validToken = (await getValidAccessToken()) || accessToken
-      let response = await fetch('/api/live/token', { method: 'POST', headers: { Authorization: `Bearer ${validToken}`, 'X-Assistant-Mode': assistantMode }, signal: tokenRequest.signal })
+      let response = await fetch(apiUrl('/api/live/token'), { method: 'POST', headers: { Authorization: `Bearer ${validToken}`, 'X-Assistant-Mode': assistantMode }, signal: tokenRequest.signal })
       if (response.status === 401) {
         const refreshedToken = await getValidAccessToken(true)
         if (refreshedToken) {
-          response = await fetch('/api/live/token', { method: 'POST', headers: { Authorization: `Bearer ${refreshedToken}`, 'X-Assistant-Mode': assistantMode }, signal: tokenRequest.signal })
+          response = await fetch(apiUrl('/api/live/token'), { method: 'POST', headers: { Authorization: `Bearer ${refreshedToken}`, 'X-Assistant-Mode': assistantMode }, signal: tokenRequest.signal })
         }
       }
       const data = await response.json() as { error?: string; token?: string; model?: string; voiceProvider?: string }

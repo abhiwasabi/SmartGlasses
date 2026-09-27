@@ -3,6 +3,7 @@ import { AlertTriangle, AudioLines, Car, Mic, Square } from 'lucide-react'
 import type { useGeminiLive } from '../hooks/useGeminiLive'
 import type { AssistantMode } from '../lib/assistantMode'
 import { getValidAccessToken } from '../lib/supabase'
+import { apiUrl } from '../lib/api'
 
 type VoiceOption = { id: string; name: string }
 type Props = {
@@ -38,11 +39,11 @@ export function AssistantPanel({ assistant, accessToken, voiceId, setVoiceId, ca
     void (async () => {
       try {
         const token = (await getValidAccessToken()) || accessToken
-        let response = await fetch('/api/live/voices', { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal })
+        let response = await fetch(apiUrl('/api/live/voices'), { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal })
         if (response.status === 401) {
           const refreshed = await getValidAccessToken(true)
           if (refreshed) {
-            response = await fetch('/api/live/voices', { headers: { Authorization: `Bearer ${refreshed}` }, signal: controller.signal })
+            response = await fetch(apiUrl('/api/live/voices'), { headers: { Authorization: `Bearer ${refreshed}` }, signal: controller.signal })
           }
         }
         const data = await response.json() as { voices?: VoiceOption[]; defaultVoiceId?: string; error?: string }
