@@ -140,8 +140,9 @@ single-session ephemeral token; the permanent Gemini key never reaches React.
 The token route runs with both `npm run dev` and `npm run preview`; a static-only
 hosting service cannot run this endpoint.
 
-1. Copy `.env.example` to `.env.local`.
-2. Have the key owner enter `GEMINI_API_KEY` privately in that file. Never put it
+1. The shared `.env` already contains the public Supabase browser configuration.
+   Keep server credentials in `.env.local`; that private file is never committed.
+2. Have the key owner enter `GEMINI_API_KEY` privately in `.env.local`. Never put it
    in a `VITE_` variable, commit it, or paste it into chat.
 3. Configure `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`. Signed-in
    account sessions protect token creation, including when using a public URL.
