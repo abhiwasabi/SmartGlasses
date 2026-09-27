@@ -17,6 +17,7 @@ Clarity brings autonomous-grade perception and public mobility intelligence to e
 - **Waymo Autonomous Pickup Navigator:** Identifies designated safe curb loading zones on campus (avoiding bike lanes, fire lanes, and congested transit stops) with ADA ramp access, lighting ratings, and designated passenger cut-outs.
 - **Pedestrian Vision Shield:** Clarity will alert pedestrians hands-free to crosswalk signals (Walk vs. Don't Walk), turning vehicles, and approaching micro-mobility through real-time audio-visual perception.
 - **Campus Routes & Elevation Intelligence:** Integrates Google Maps walking directions, elevation profiles, and illuminated night corridors for low-risk navigation.
+- **Heads-Up Auditory Turn-by-Turn Navigation:** Spoken walking guidance delivered through smart glasses audio with step-by-step turns, distance countdowns, and crosswalk safety alerts so pedestrians keep their eyes on their surroundings instead of staring down at a screen.
 - **1-Click Google Maps Integration:** Direct launch into Google Maps from dashboard cards and voice-generated mobility notes.
 
 ---

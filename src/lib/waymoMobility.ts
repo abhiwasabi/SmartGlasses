@@ -10,6 +10,15 @@ export type WaymoPickupZone = {
   tip: string
 }
 
+export type RouteStep = {
+  stepNumber: number
+  instruction: string
+  distance: string
+  turnType: 'straight' | 'left' | 'right' | 'slight-left' | 'slight-right' | 'arrive'
+  audioText: string
+  safetyAlert?: string
+}
+
 export type MobilityRoute = {
   id: string
   name: string
@@ -23,6 +32,7 @@ export type MobilityRoute = {
   nightSafety: 'High (Illuminated)' | 'Moderate'
   googleMapsUrl: string
   routeHighlights: string[]
+  steps: RouteStep[]
 }
 
 export const WAYMO_PICKUP_ZONES: WaymoPickupZone[] = [
@@ -101,6 +111,45 @@ export const MOBILITY_ROUTES: MobilityRoute[] = [
       'Continuous wide sidewalk separated from vehicle lanes',
       'Illuminated LED path with emergency call boxes every 300 ft',
     ],
+    steps: [
+      {
+        stepNumber: 1,
+        instruction: 'Head east from Graham Center along the central campus walkway toward the fountain plaza.',
+        distance: '400 ft',
+        turnType: 'straight',
+        audioText: 'Starting navigation to Engineering Center. Head east from Graham Center along the central walkway for 400 feet toward the fountain plaza.',
+      },
+      {
+        stepNumber: 2,
+        instruction: 'Turn left onto the East Promenade toward the pedestrian bridge.',
+        distance: '600 ft',
+        turnType: 'left',
+        audioText: 'Turn left onto the East Promenade. Walk straight along the illuminated pathway for 600 feet toward the pedestrian bridge.',
+      },
+      {
+        stepNumber: 3,
+        instruction: 'Take the covered pedestrian bridge ramp over the SW 8th Street corridor.',
+        distance: '500 ft',
+        turnType: 'slight-right',
+        safetyAlert: 'Pedestrian overpass · Fully barrier-separated walkway over highway traffic',
+        audioText: 'Ascend the gentle ramp and cross the covered pedestrian bridge over SW 8th Street. Stay on the right side of the walkway.',
+      },
+      {
+        stepNumber: 4,
+        instruction: 'Descend to 107th Avenue sidewalk and continue north toward Engineering Center entrance.',
+        distance: '800 ft',
+        turnType: 'right',
+        safetyAlert: 'Signalized crosswalk ahead · Wait for the pedestrian countdown',
+        audioText: 'Exit the bridge and continue north along the 107th Avenue sidewalk for 800 feet. Cross at the signalized crosswalk.',
+      },
+      {
+        stepNumber: 5,
+        instruction: 'Turn left into the Engineering Center East Terminal Waymo pickup bay.',
+        distance: '150 ft',
+        turnType: 'arrive',
+        audioText: 'Turn left into the entrance circle. You have arrived at the Engineering Center Waymo pickup hub on your left.',
+      },
+    ],
   },
   {
     id: 'route-gl-to-red',
@@ -119,6 +168,37 @@ export const MOBILITY_ROUTES: MobilityRoute[] = [
       'Fully tree-shaded walkway with resting benches',
       'Direct ADA ramp leading into ground-level covered transit curb',
     ],
+    steps: [
+      {
+        stepNumber: 1,
+        instruction: 'Head west from Green Library entrance along the pedestrian promenade.',
+        distance: '250 ft',
+        turnType: 'straight',
+        audioText: 'Starting route to Red Garage. Head west from the library entrance along the promenade for 250 feet.',
+      },
+      {
+        stepNumber: 2,
+        instruction: 'Turn slightly left past the outdoor breezeway toward the campus transit lane.',
+        distance: '350 ft',
+        turnType: 'slight-left',
+        audioText: 'Turn slightly left past the covered breezeway. Walk straight for 350 feet past the student pavilion.',
+      },
+      {
+        stepNumber: 3,
+        instruction: 'Cross at the signalized campus crosswalk toward the garage entrance.',
+        distance: '120 ft',
+        turnType: 'straight',
+        safetyAlert: 'Crosswalk alert · Watch for campus transit shuttles before crossing',
+        audioText: 'Signalized campus crosswalk ahead. Check both directions for shuttles, then cross toward Red Garage.',
+      },
+      {
+        stepNumber: 4,
+        instruction: 'Turn right into the ground-level covered transit bay.',
+        distance: '100 ft',
+        turnType: 'arrive',
+        audioText: 'Turn right onto the covered transit curb. You have arrived at the Red Garage Waymo loading zone.',
+      },
+    ],
   },
   {
     id: 'route-housing-to-arena',
@@ -136,6 +216,37 @@ export const MOBILITY_ROUTES: MobilityRoute[] = [
       'Signalized pedestrian crosswalk with audible countdown timers',
       'Separated scooter/bike lane adjacent to walking path',
       'High visibility open curb for quick Waymo ride-hail connection',
+    ],
+    steps: [
+      {
+        stepNumber: 1,
+        instruction: 'Head south from Parkview Hall entrance along the housing quad pathway.',
+        distance: '300 ft',
+        turnType: 'straight',
+        audioText: 'Starting route to Ocean Bank Arena. Head south along the housing quad pathway for 300 feet.',
+      },
+      {
+        stepNumber: 2,
+        instruction: 'Turn right at the fitness pavilion toward the recreation loop.',
+        distance: '400 ft',
+        turnType: 'right',
+        audioText: 'Turn right at the outdoor fitness pavilion. Follow the illuminated night corridor for 400 feet.',
+      },
+      {
+        stepNumber: 3,
+        instruction: 'Cross the recreation loop at the high-visibility pedestrian crosswalk.',
+        distance: '150 ft',
+        turnType: 'straight',
+        safetyAlert: 'Micro-mobility alert · Yield to approaching bikes and electric scooters',
+        audioText: 'Approaching the recreation loop crosswalk. Watch for oncoming bikes and electric scooters, then cross.',
+      },
+      {
+        stepNumber: 4,
+        instruction: 'Follow the curve to Ocean Bank Arena wide turnaround circle.',
+        distance: '180 ft',
+        turnType: 'arrive',
+        audioText: 'Continue 180 feet along the arena perimeter sidewalk. You have arrived at the Waymo turnaround bay on your right.',
+      },
     ],
   },
 ]

@@ -229,6 +229,8 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
             const rawDest = typeof call.args?.destination === 'string' ? call.args.destination.trim().toLowerCase() : ''
             const route = MOBILITY_ROUTES.find(r => r.name.toLowerCase().includes(rawDest) || r.destination.toLowerCase().includes(rawDest)) || MOBILITY_ROUTES[0]
             const title = `Waymo Safe Route · ${route.name}`
+            const stepsList = route.steps.map(s => `${s.stepNumber}. [${s.distance}] ${s.instruction}`).join('\n')
+            const spokenTurns = route.steps.map(s => `Turn ${s.stepNumber} (${s.distance}): ${s.audioText}`).join(' ')
             const content = [
               `WAYMO SAFE MOBILITY & PEDESTRIAN ROUTE`,
               `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
@@ -239,6 +241,9 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
               `Night Illumination Safety: ${route.nightSafety}`,
               `Google Maps Directions: ${route.googleMapsUrl}`,
               ``,
+              `STEP-BY-STEP SPOKEN TURNS`,
+              `${stepsList}`,
+              ``,
               `PEDESTRIAN & MOBILITY SAFETY HIGHLIGHTS`,
               ...route.routeHighlights.map(h => `• ${h}`),
               ``,
@@ -248,7 +253,7 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
             ].join('\n')
 
             actionsRef.current.onNote(content, true, title, 'Waymo Mobility')
-            result = `Clarity calculated the safe pedestrian route along ${route.name} and saved it to notes with Google Maps directions.`
+            result = `Clarity calculated the safe pedestrian route along ${route.name}. Spoken turn-by-turn guidance: ${spokenTurns}. Saved to notes with Google Maps directions.`
             break
           }
           default:

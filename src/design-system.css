@@ -929,3 +929,386 @@ main.drive-mode-active .assistant-panel { margin: 20px auto; }
   }
 }
 
+/* Waymo Auditory Navigation & Routes Modal */
+.waymo-navigation-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.waymo-route-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.waymo-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.waymo-tab-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.waymo-tab-btn.active {
+  background: #0288d1;
+  color: #ffffff;
+  border-color: #0288d1;
+  box-shadow: 0 2px 6px rgba(2, 136, 209, 0.25);
+}
+
+.waymo-route-banner {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 1px solid #bae6fd;
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
+.banner-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.banner-title-row h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0369a1;
+  margin: 0;
+}
+
+/* Auditory Navigation Player */
+.waymo-audio-player {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+}
+
+.player-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
+  flex-wrap: wrap;
+}
+
+.player-indicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.audio-pulse-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #94a3b8;
+  transition: all 0.3s ease;
+}
+
+.audio-pulse-dot.active {
+  background: #0288d1;
+  box-shadow: 0 0 0 4px rgba(2, 136, 209, 0.2);
+  animation: pulse 1.6s infinite;
+}
+
+.player-indicator strong {
+  display: block;
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.player-indicator small {
+  display: block;
+  font-size: 10.5px;
+  color: #64748b;
+}
+
+.player-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.player-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.player-btn:hover:not(:disabled) {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.player-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.control-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}
+
+.play-btn {
+  padding: 6px 14px;
+  height: 32px;
+  background: #0288d1;
+  color: #ffffff;
+  border-color: #0288d1;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.play-btn:hover:not(:disabled) {
+  background: #0277bd;
+  color: #ffffff;
+}
+
+.play-btn.is-playing {
+  background: #e11d48;
+  border-color: #e11d48;
+}
+
+/* Active Turn Spotlight */
+.active-turn-spotlight {
+  margin-top: 12px;
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+}
+
+.spotlight-step-badge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.step-num {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #0288d1;
+}
+
+.step-dist {
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  background: #e2e8f0;
+  padding: 1px 7px;
+  border-radius: 4px;
+}
+
+.spotlight-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.spotlight-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #e0f2fe;
+  color: #0288d1;
+  flex-shrink: 0;
+}
+
+.instruction-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1e293b;
+  margin: 0 0 4px;
+  line-height: 1.4;
+}
+
+.safety-alert-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  color: #b45309;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+/* Step-by-Step List */
+.waymo-steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.steps-list-heading {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #64748b;
+  margin: 4px 0 2px;
+}
+
+.turn-step-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.turn-step-card:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.turn-step-card.is-active-step {
+  border-color: #0288d1;
+  background: #f0f9ff;
+  box-shadow: 0 0 0 1px #0288d1;
+}
+
+.step-left {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.turn-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.turn-step-card.is-active-step .turn-icon-wrap {
+  background: #0288d1;
+  color: #ffffff;
+}
+
+.turn-icon-wrap.arrive {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.step-number-label {
+  font-size: 9px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.step-middle {
+  flex: 1;
+  min-width: 0;
+}
+
+.step-instruction {
+  font-size: 12px;
+  color: #1e293b;
+  margin: 0 0 4px;
+  line-height: 1.35;
+}
+
+.step-submeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.step-distance-badge {
+  font-size: 10px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.step-alert-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: #b45309;
+  font-weight: 500;
+}
+
+.step-speaker-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #64748b;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.step-speaker-btn:hover {
+  background: #0288d1;
+  color: #ffffff;
+  border-color: #0288d1;
+}
+
+.speaking-anim {
+  animation: pulse 1s infinite;
+  color: #0288d1;
+}
+
+.waymo-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
