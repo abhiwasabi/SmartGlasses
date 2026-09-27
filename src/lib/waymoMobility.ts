@@ -251,10 +251,16 @@ export const MOBILITY_ROUTES: MobilityRoute[] = [
   },
 ]
 
+export type Coordinates = {
+  lat: number
+  lng: number
+}
+
 export type CampusSpot = {
   name: string
   shortLabel: string
   category: string
+  coordinates: Coordinates
   distance: string
   walkingTime: string
   bikeTime: string
@@ -271,6 +277,7 @@ export const POPULAR_CAMPUS_SPOTS: CampusSpot[] = [
     name: 'Green Library & Quad',
     shortLabel: 'Green Library',
     category: 'Academic Core',
+    coordinates: { lat: 25.7574, lng: -80.3740 },
     distance: '0.3 miles',
     walkingTime: '6 mins',
     bikeTime: '2 mins',
@@ -319,6 +326,7 @@ export const POPULAR_CAMPUS_SPOTS: CampusSpot[] = [
     name: 'Graham Student Center (GC)',
     shortLabel: 'Graham Center',
     category: 'Student Union & Dining',
+    coordinates: { lat: 25.7562, lng: -80.3746 },
     distance: '0.2 miles',
     walkingTime: '4 mins',
     bikeTime: '1 min',
@@ -359,6 +367,7 @@ export const POPULAR_CAMPUS_SPOTS: CampusSpot[] = [
     name: 'Engineering Center (107th Ave)',
     shortLabel: 'Engineering Center',
     category: 'Technology & Computing',
+    coordinates: { lat: 25.7681, lng: -80.3675 },
     distance: '0.9 miles',
     walkingTime: '17 mins',
     bikeTime: '5 mins',
@@ -415,6 +424,7 @@ export const POPULAR_CAMPUS_SPOTS: CampusSpot[] = [
     name: 'Ocean Bank Arena & Recreation Circle',
     shortLabel: 'Ocean Bank Arena',
     category: 'Athletics & Events',
+    coordinates: { lat: 25.7533, lng: -80.3780 },
     distance: '0.4 miles',
     walkingTime: '8 mins',
     bikeTime: '3 mins',
@@ -463,6 +473,7 @@ export const POPULAR_CAMPUS_SPOTS: CampusSpot[] = [
     name: 'Frost Art Museum & Cultural Lake',
     shortLabel: 'Frost Art Museum',
     category: 'Arts & Culture',
+    coordinates: { lat: 25.7600, lng: -80.3756 },
     distance: '0.45 miles',
     walkingTime: '9 mins',
     bikeTime: '3 mins',
@@ -503,6 +514,7 @@ export const POPULAR_CAMPUS_SPOTS: CampusSpot[] = [
     name: 'MANGO Building (Management & New Growth)',
     shortLabel: 'MANGO Building',
     category: 'Academic & International',
+    coordinates: { lat: 25.7550, lng: -80.3725 },
     distance: '0.35 miles',
     walkingTime: '7 mins',
     bikeTime: '2 mins',
@@ -551,6 +563,7 @@ export const POPULAR_CAMPUS_SPOTS: CampusSpot[] = [
     name: 'Red Parking Garage & Transit Hub',
     shortLabel: 'Red Garage Hub',
     category: 'Multi-Modal Parking',
+    coordinates: { lat: 25.7585, lng: -80.3762 },
     distance: '0.3 miles',
     walkingTime: '6 mins',
     bikeTime: '2 mins',
@@ -599,6 +612,7 @@ export const POPULAR_CAMPUS_SPOTS: CampusSpot[] = [
     name: 'Student Health & Wellness Center',
     shortLabel: 'Student Health',
     category: 'Medical & Wellness',
+    coordinates: { lat: 25.7580, lng: -80.3730 },
     distance: '0.45 miles',
     walkingTime: '9 mins',
     bikeTime: '3 mins',
@@ -645,25 +659,96 @@ export const POPULAR_CAMPUS_SPOTS: CampusSpot[] = [
   },
 ]
 
-export function calculateDynamicRoute(destinationInput: string, origin = 'Current Location (Campus Core)'): MobilityRoute {
+export function calculateHaversineDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371e3 // Earth radius in meters
+  const phi1 = (lat1 * Math.PI) / 180
+  const phi2 = (lat2 * Math.PI) / 180
+  const deltaPhi = ((lat2 - lat1) * Math.PI) / 180
+  const deltaLambda = ((lon2 - lon1) * Math.PI) / 180
+
+  const a =
+    Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+    Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
+}
+
+export function calculateCompassBearing(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): { degrees: number; cardinal: string } {
+  const y = Math.sin(((lon2 - lon1) * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180)
+  const x =
+    Math.cos((lat1 * Math.PI) / 180) * Math.sin((lat2 * Math.PI) / 180) -
+    Math.sin((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.cos(((lon2 - lon1) * Math.PI) / 180)
+  const brng = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360
+  const cardinals = ['North', 'North-East', 'East', 'South-East', 'South', 'South-West', 'West', 'North-West']
+  const idx = Math.round(brng / 45) % 8
+  return { degrees: Math.round(brng), cardinal: cardinals[idx] }
+}
+
+export function getDestinationCoordinates(destinationName: string): Coordinates {
+  const query = destinationName.trim().toLowerCase()
+  const matched = POPULAR_CAMPUS_SPOTS.find(
+    s => s.name.toLowerCase().includes(query) || s.shortLabel.toLowerCase().includes(query)
+  )
+  if (matched?.coordinates) return matched.coordinates
+  return { lat: 25.7562, lng: -80.3746 }
+}
+
+export function calculateDynamicRoute(
+  destinationInput: string,
+  userCoords?: Coordinates | null,
+  originLabel?: string
+): MobilityRoute {
   const query = destinationInput.trim().toLowerCase()
   const matchedSpot = POPULAR_CAMPUS_SPOTS.find(
     s => s.name.toLowerCase().includes(query) || s.shortLabel.toLowerCase().includes(query)
   )
 
+  const origin = userCoords
+    ? (originLabel || 'Your Live GPS Location')
+    : (originLabel || 'Campus Core')
+
+  const originParam = userCoords
+    ? `${userCoords.lat},${userCoords.lng}`
+    : 'Graham+Center+FIU'
+
   if (matchedSpot) {
+    let distance = matchedSpot.distance
+    let walkingTime = matchedSpot.walkingTime
+    let bikeTime = matchedSpot.bikeTime
+
+    if (userCoords) {
+      const distMeters = calculateHaversineDistanceMeters(
+        userCoords.lat,
+        userCoords.lng,
+        matchedSpot.coordinates.lat,
+        matchedSpot.coordinates.lng
+      )
+      if (distMeters < 1000) {
+        distance = `${Math.round(distMeters)} meters (${Math.round(distMeters * 3.28084)} ft)`
+      } else {
+        distance = `${(distMeters * 0.000621371).toFixed(2)} miles`
+      }
+      walkingTime = `${Math.max(1, Math.round(distMeters / 80))} mins`
+      bikeTime = `${Math.max(1, Math.round(distMeters / 250))} mins`
+    }
+
     return {
       id: `dynamic-${matchedSpot.shortLabel.toLowerCase().replace(/\s+/g, '-')}`,
       name: `${origin} → ${matchedSpot.name}`,
       origin,
       destination: matchedSpot.name,
-      distance: matchedSpot.distance,
-      walkingTime: matchedSpot.walkingTime,
-      bikeTime: matchedSpot.bikeTime,
+      distance,
+      walkingTime,
+      bikeTime,
       elevationChange: matchedSpot.elevationChange,
       crosswalkCount: matchedSpot.crosswalkCount,
       nightSafety: matchedSpot.nightSafety,
-      googleMapsUrl: `https://www.google.com/maps/dir/?api=1&origin=Graham+Center+FIU&destination=${encodeURIComponent(matchedSpot.name + ' FIU Miami')}&travelmode=walking`,
+      googleMapsUrl: `https://www.google.com/maps/dir/?api=1&origin=${originParam}&destination=${encodeURIComponent(matchedSpot.name + ' FIU Miami')}&travelmode=walking`,
       routeHighlights: matchedSpot.highlights,
       steps: matchedSpot.steps,
     }
@@ -671,18 +756,39 @@ export function calculateDynamicRoute(destinationInput: string, origin = 'Curren
 
   // Format arbitrary destination gracefully
   const cleanDestination = destinationInput.trim() || 'Campus Destination'
+  const destCoords = { lat: 25.7562, lng: -80.3746 }
+  let distance = '0.4 miles'
+  let walkingTime = '8 mins'
+  let bikeTime = '3 mins'
+
+  if (userCoords) {
+    const distMeters = calculateHaversineDistanceMeters(
+      userCoords.lat,
+      userCoords.lng,
+      destCoords.lat,
+      destCoords.lng
+    )
+    if (distMeters < 1000) {
+      distance = `${Math.round(distMeters)} meters (${Math.round(distMeters * 3.28084)} ft)`
+    } else {
+      distance = `${(distMeters * 0.000621371).toFixed(2)} miles`
+    }
+    walkingTime = `${Math.max(1, Math.round(distMeters / 80))} mins`
+    bikeTime = `${Math.max(1, Math.round(distMeters / 250))} mins`
+  }
+
   return {
     id: `custom-${Date.now()}`,
     name: `${origin} → ${cleanDestination}`,
     origin,
     destination: cleanDestination,
-    distance: '0.4 miles',
-    walkingTime: '8 mins',
-    bikeTime: '3 mins',
+    distance,
+    walkingTime,
+    bikeTime,
     elevationChange: '+3 ft flat grade · 100% ADA compliant',
     crosswalkCount: 2,
     nightSafety: 'High (Illuminated)',
-    googleMapsUrl: `https://www.google.com/maps/dir/?api=1&origin=Graham+Center+FIU&destination=${encodeURIComponent(cleanDestination + ' FIU Miami')}&travelmode=walking`,
+    googleMapsUrl: `https://www.google.com/maps/dir/?api=1&origin=${originParam}&destination=${encodeURIComponent(cleanDestination + ' FIU Miami')}&travelmode=walking`,
     routeHighlights: [
       `Real-time safe pedestrian routing to ${cleanDestination}`,
       'Prioritizes illuminated campus pathways and verified crosswalks',
@@ -691,10 +797,10 @@ export function calculateDynamicRoute(destinationInput: string, origin = 'Curren
     steps: [
       {
         stepNumber: 1,
-        instruction: `Head along the main campus walkway from ${origin} toward the central concourse.`,
+        instruction: `Head along the walkway from ${origin} toward the central concourse.`,
         distance: '200 ft',
         turnType: 'straight',
-        audioText: `Starting route to ${cleanDestination}. Head along the main walkway for 200 feet toward the central concourse.`,
+        audioText: `Starting route to ${cleanDestination}. Head along the walkway toward the concourse.`,
       },
       {
         stepNumber: 2,
