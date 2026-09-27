@@ -27,6 +27,23 @@ test('speech requires authorization and setup before calling ElevenLabs', async 
   assert.equal((await request(elevenLabsMiddleware({}), {})).status, 503)
   assert.equal((await request(handler, { url: '/other' })).next, true)
 })
+
+test('account verification outages return a retryable error for voices, speech, and session creation', async () => {
+  const unavailable = async () => { throw new Error('Private provider details') }
+  const send = async () => assert.fail('Must not call upstream')
+  const speech = elevenLabsMiddleware(settings, send, unavailable)
+  const token = liveTokenMiddleware(settings, send, unavailable)
+  for (const [handler, options] of [
+    [speech, {}],
+    [speech, { url: '/api/live/voices', method: 'GET' }],
+    [token, { url: '/api/live/token' }],
+  ]) {
+    const result = await request(handler, options)
+    assert.equal(result.status, 503)
+    assert.match(JSON.parse(result.body).error, /temporarily unavailable/)
+    assert.doesNotMatch(result.body, /expired|Private provider details/)
+  }
+})
 test('speech rejects malformed, empty, oversized, and non-string text', async () => {
   const handler = elevenLabsMiddleware(settings, async () => assert.fail('Must not call upstream'), authorize)
   for (const body of ['{', '{}', '{"text":42}', '{"text":" "}', JSON.stringify({ text: 'x'.repeat(4001) })]) {

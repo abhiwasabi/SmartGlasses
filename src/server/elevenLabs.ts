@@ -33,7 +33,11 @@ export function elevenLabsMiddleware(settings: SpeechSettings, send: typeof fetc
       reply(503, 'Add ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID to .env.local, then restart the dashboard.'); return
     }
     if (!settings.supabaseUrl || !settings.supabasePublishableKey) { reply(503, 'Account authorization is not configured on the server.'); return }
-    if (!await authorize(req)) { reply(401, 'Your account session expired. Sign in again to use assistant speech.'); return }
+    try {
+      if (!await authorize(req)) { reply(401, 'Your account session expired. Sign in again to use assistant speech.'); return }
+    } catch {
+      reply(503, 'Account verification is temporarily unavailable. Try again in a moment.'); return
+    }
     if (path === '/api/live/voices') {
       if (req.method !== 'GET') { reply(405, 'Use GET to list assistant voices.'); return }
       try { replyJson(200, { voices: await loadVoices(), defaultVoiceId: settings.voiceId }) }

@@ -39,4 +39,3 @@ const claimTools: NonNullable<Tool['functionDeclarations']> = [
 
 export const LIVE_TOOLS: Tool[] = [{ functionDeclarations: [...captureTools, ...noteTools, ...claimTools] }]
 export const DRIVE_MODE_TOOLS: Tool[] = [{ functionDeclarations: [...captureTools, ...claimTools] }]
-

@@ -50,7 +50,11 @@ export function liveTokenMiddleware(settings: LiveSettings, mint: MintToken, aut
     if ((settings.elevenLabsApiKey || settings.elevenLabsVoiceId) && !(settings.elevenLabsApiKey && settings.elevenLabsVoiceId)) {
       reply(503, { error: 'ElevenLabs setup needed: configure both ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID, then restart the dashboard.' }); return
     }
-    if (!await authorize(req)) { reply(401, { error: 'Your account session expired. Sign in again to start the assistant.' }); return }
+    try {
+      if (!await authorize(req)) { reply(401, { error: 'Your account session expired. Sign in again to start the assistant.' }); return }
+    } catch {
+      reply(503, { error: 'Account verification is temporarily unavailable. Try again in a moment.' }); return
+    }
     if (Date.now() - windowStart > 60_000) { requests = 0; windowStart = Date.now() }
     if (++requests > 6) { reply(429, { error: 'Too many session requests. Wait a minute and try again.' }); return }
     try {

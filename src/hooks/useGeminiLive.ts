@@ -4,6 +4,7 @@ import { encodePcm, decodePcm } from '../lib/liveAudio'
 import { DRIVE_MODE_TOOLS, LIVE_TOOLS } from '../lib/liveTools'
 import type { AssistantMode } from '../lib/assistantMode'
 import { getValidAccessToken } from '../lib/supabase'
+import { openMicrophone, microphoneErrorMessage } from '../lib/microphone'
 
 type Status = 'off' | 'connecting' | 'listening' | 'speaking'
 type Caption = { role: 'You' | 'Assistant'; text: string }
@@ -51,6 +52,7 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
     let mic: MediaStream | undefined
     let capture: AudioWorkletNode | undefined
     let source: MediaStreamAudioSourceNode | undefined
+    let openingMicrophone = false
     let frameTimer: number | undefined
     let durationTimer: number | undefined
     let video: HTMLVideoElement | undefined
@@ -350,10 +352,9 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
       if (!response.ok || !data.token || !data.model) throw new Error(data.error || 'The assistant could not start.')
       elevenLabs = data.voiceProvider === 'elevenlabs'
       if (!current()) return
-      mic = await navigator.mediaDevices.getUserMedia({ video: false, audio: {
-        echoCancellation: true, noiseSuppression: true, channelCount: 1,
-        ...(microphoneId ? { deviceId: { exact: microphoneId } } : {}),
-      } })
+      openingMicrophone = true
+      mic = await openMicrophone(microphoneId)
+      openingMicrophone = false
       if (!current()) { mic.getTracks().forEach(track => track.stop()); return }
       mic.getAudioTracks()[0]?.addEventListener('ended', () => fail('The microphone disconnected. Start again to reconnect.'), { once: true })
       await context.audioWorklet.addModule('/live-audio-worklet.js')
@@ -423,12 +424,17 @@ export function useGeminiLive(cameraStream: MediaStream | null, microphoneId: st
       durationTimer = window.setTimeout(() => fail('Session finished. Tap Start assistant for another conversation.'), 8 * 60_000)
       setStatus('listening')
     } catch (reason) {
-      fail(reason instanceof Error ? reason.message : 'The assistant could not start. Check microphone access and try again.')
+      fail(openingMicrophone ? microphoneErrorMessage(reason) : (reason instanceof Error ? reason.message.trim() : '') || 'The assistant could not start. Check microphone access and try again.')
     }
   }, [beforeStart, microphoneId, stop, accessToken, voiceId])
 
   useEffect(() => {
-    const hidden = () => { if (document.hidden) stop() }
+    const hidden = () => {
+      if (document.hidden && cleanup.current) {
+        stop()
+        setError('The assistant stopped because this page went into the background. Keep Clarity visible and tap Start assistant again.')
+      }
+    }
     document.addEventListener('visibilitychange', hidden)
     return () => { document.removeEventListener('visibilitychange', hidden); generation.current++; cleanup.current?.() }
   }, [stop])

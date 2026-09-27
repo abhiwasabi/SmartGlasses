@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { openMicrophone, supportsMicrophoneSelection } from '../src/lib/microphone.ts'
+import { microphoneErrorMessage, openMicrophone, supportsMicrophoneSelection } from '../src/lib/microphone.ts'
 
 test('offers explicit speech input only on desktop Chromium with audio-track support', () => {
   assert.equal(supportsMicrophoneSelection('Mozilla/5.0 Chrome/135.0.0.0 Safari/537.36'), true)
@@ -37,4 +37,12 @@ test('a missing selected microphone rejects instead of silently using another in
   mockCapture(t, async () => { calls++; throw new DOMException('Missing input', 'OverconstrainedError') })
   await assert.rejects(openMicrophone('disconnected-mic'), { name: 'OverconstrainedError' })
   assert.equal(calls, 1)
+})
+
+test('empty browser capture exceptions still explain how to recover', () => {
+  assert.match(microphoneErrorMessage(new DOMException('', 'OverconstrainedError')), /System default/)
+  assert.match(microphoneErrorMessage(new DOMException('', 'NotAllowedError')), /Allow microphone access/)
+  assert.match(microphoneErrorMessage(new DOMException('', 'NotReadableError')), /busy/)
+  assert.ok(microphoneErrorMessage(new Error('')).length > 0)
+  assert.ok(microphoneErrorMessage(undefined).length > 0)
 })
