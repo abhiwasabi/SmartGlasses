@@ -14,10 +14,20 @@ Clarity transforms wearable smart glasses into an everyday **Auto Insurance & St
 - **SafePark™ Campus Theft & Risk Scanner:** Interactive protocol educating student drivers on campus break-in prevention (hiding valuables before arriving), parking garage safety, Comprehensive vs. Collision coverage, and discounts (**Good Student Discount**, **Drive Safe & Save™**).
 - **Drive Mode Safety:** Hands-free claims co-pilot accessible while driving without touching the phone.
 
+### 🚗 ShellHacks 2026 · The Waymo Mobility Challenge
+> **"Waymo is an autonomous driving technology company with the mission to be the most trusted driver. With this mission in mind, we challenge you to use publicly available data to create a hack that improves transportation... directions, 360º street view, aerial view, elevation data... build the best transportation-related hack."**
+
+Clarity brings autonomous-grade perception and public mobility intelligence to everyday pedestrians, riders, and student drivers:
+- **Waymo Autonomous Pickup Navigator:** Identifies designated safe curb loading zones on campus (avoiding bike lanes, fire lanes, and congested transit stops) with ADA ramp access, lighting ratings, and designated passenger cut-outs.
+- **Pedestrian Vision Shield:** Gemini Live audio-visual perception alerts pedestrians hands-free to crosswalk signals (Walk vs. Don't Walk), turning vehicles, and approaching micro-mobility.
+- **Campus Routes & Elevation Intelligence:** Integrates Google Maps walking directions, elevation profiles, and illuminated night corridors for low-risk campus navigation.
+- **1-Click Google Maps Integration:** Direct launch into Google Maps from dashboard cards and voice-generated mobility notes.
+
 ---
 
 ## Features
 
+- **Waymo Autonomous Mobility Co-Pilot:** Designated safe curb pickup bays, pedestrian vision shield, and Google Maps campus route navigation.
 - **State Farm Auto Insurance Co-Pilot:** Complete hands-free accident protocol, visual evidence capture, and online claim filing integration.
 - Camera preview and recording, with a choice of two configured ESP32-CAM devices or the phone/computer camera.
 - Recording playback and download, with saved recordings included in the memory library.
